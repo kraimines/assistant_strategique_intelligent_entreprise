@@ -1,0 +1,82 @@
+﻿  hr_recruitment_pipeline  ·  80 lignes  ·  14 colonnes,Unnamed: 1,Unnamed: 2,Unnamed: 3,Unnamed: 4,Unnamed: 5,Unnamed: 6,Unnamed: 7,Unnamed: 8,Unnamed: 9,Unnamed: 10,Unnamed: 11,Unnamed: 12,Unnamed: 13
+job_id,role,department_id,seniority_level,required_skill,status,source,open_date,expected_hire_date,actual_hire_date,salary_budget,n_candidates,recruiter_id,priority
+JOB0001,DevOps Engineer,DEP007,Mid,AWS,Screening,Agency,2023-03-08,2023-06-01,,129837.58,30,EMP0060,Medium
+JOB0002,Sales Manager,DEP003,Mid,SAP,Screening,Agency,2024-11-04,2024-12-17,,100088.86,13,EMP0118,Medium
+JOB0003,HR Consultant,DEP009,Mid,SAP,Open,Referral,2023-02-10,2023-04-16,,121821.9,32,EMP0060,High
+JOB0004,Data Engineer,DEP010,Junior,Kubernetes,Interview,Job Fair,2023-08-29,2023-10-07,,94180.8,14,EMP0021,Medium
+JOB0005,Sales Manager,DEP004,Senior,Python,Screening,Agency,2024-04-23,2024-05-30,,128589.48,3,EMP0127,Medium
+JOB0006,Senior Developer,DEP009,Senior,Kubernetes,Technical Test,Indeed,2023-11-01,2024-02-11,,111490.24,32,EMP0097,Medium
+JOB0007,Financial Analyst,DEP007,Junior,React,Open,Company Website,2023-03-14,2023-05-13,,75464.25,19,EMP0142,High
+JOB0008,Sales Manager,DEP005,Senior,React,Offer,LinkedIn,2023-06-16,2023-09-01,,61672.28,15,EMP0009,Medium
+JOB0009,Data Engineer,DEP002,Lead,SAP,Interview,Job Fair,2023-04-09,2023-07-22,,103544.98,10,EMP0026,High
+JOB0010,HR Consultant,DEP008,Mid,Kubernetes,Screening,Indeed,2023-04-20,2023-08-14,,79161.74,25,EMP0003,Low
+JOB0011,Sales Manager,DEP001,Lead,AWS,Screening,Indeed,2024-05-18,2024-07-17,,65166.92,11,EMP0108,Low
+JOB0012,Cloud Architect,DEP009,Mid,AWS,Offer,Indeed,2024-04-22,2024-05-27,,98830.58,37,EMP0029,High
+JOB0013,Data Scientist,DEP008,Mid,React,Open,Referral,2024-06-22,2024-10-09,,102353.37,23,EMP0036,Low
+JOB0014,Data Scientist,DEP002,Lead,SAP,Hired,Agency,2024-03-27,2024-06-05,2024-07-02,63483.89,8,EMP0079,Medium
+JOB0015,Business Analyst,DEP004,Lead,AWS,Cancelled,Indeed,2023-04-18,2023-05-20,,49576.25,30,EMP0086,Medium
+JOB0016,Data Engineer,DEP005,Mid,Java,Technical Test,Company Website,2023-01-27,2023-03-01,,113099.15,18,EMP0107,High
+JOB0017,Sales Manager,DEP002,Junior,AWS,Technical Test,Referral,2023-02-15,2023-04-02,,51443.23,19,EMP0007,Medium
+JOB0018,Cloud Architect,DEP001,Junior,Kubernetes,Open,Job Fair,2023-09-26,2023-12-19,,91762.99,37,EMP0115,Medium
+JOB0019,Scrum Master,DEP004,Lead,Python,Screening,Indeed,2023-03-07,2023-05-12,,101502.89,4,EMP0072,High
+JOB0020,Project Manager,DEP008,Senior,AWS,Screening,LinkedIn,2023-07-29,2023-10-06,,48687.95,26,EMP0017,Low
+JOB0021,Senior Developer,DEP005,Junior,SQL,Hired,LinkedIn,2023-01-02,2023-02-09,2023-02-28,55366.49,24,EMP0094,Medium
+JOB0022,Financial Analyst,DEP008,Lead,AWS,Technical Test,Job Fair,2023-05-17,2023-06-22,,102881.58,17,EMP0092,Medium
+JOB0023,Financial Analyst,DEP008,Lead,Java,Open,Job Fair,2023-03-29,2023-06-29,,89432.44,38,EMP0150,Medium
+JOB0024,Financial Analyst,DEP009,Lead,Machine Learning,Hired,Job Fair,2024-04-09,2024-07-10,2024-06-21,123015.1,7,EMP0056,Medium
+JOB0025,Cloud Architect,DEP002,Junior,SAP,Open,Company Website,2023-08-07,2023-11-22,,83800.08,13,EMP0011,High
+JOB0026,Cloud Architect,DEP004,Senior,React,Open,Referral,2024-01-05,2024-02-18,,107837.43,29,EMP0131,Low
+JOB0027,Data Scientist,DEP008,Junior,Python,Hired,Agency,2023-08-17,2023-10-21,2023-11-07,100872.25,22,EMP0011,High
+JOB0028,Scrum Master,DEP002,Senior,SAP,Screening,Company Website,2024-05-11,2024-07-20,,54013.66,37,EMP0084,High
+JOB0029,HR Consultant,DEP003,Mid,SAP,Open,Company Website,2023-10-13,2023-12-21,,60529.52,8,EMP0145,Medium
+JOB0030,Senior Developer,DEP007,Lead,Python,Screening,Indeed,2023-11-18,2024-02-09,,128055.3,32,EMP0020,Medium
+JOB0031,Business Analyst,DEP008,Junior,React,Technical Test,Referral,2023-10-13,2023-12-05,,103007.53,25,EMP0087,Medium
+JOB0032,Scrum Master,DEP006,Lead,Machine Learning,Screening,Agency,2023-02-06,2023-05-04,,104376.21,35,EMP0135,Medium
+JOB0033,Data Engineer,DEP003,Junior,Python,Technical Test,Agency,2023-05-19,2023-07-01,,111268.21,3,EMP0071,High
+JOB0034,Data Engineer,DEP005,Mid,SQL,Interview,Agency,2023-03-11,2023-04-25,,53980.25,31,EMP0094,Medium
+JOB0035,Frontend Developer,DEP001,Junior,SQL,Hired,Company Website,2023-10-14,2023-11-25,2023-12-25,79752.66,8,EMP0134,Medium
+JOB0036,Project Manager,DEP003,Senior,Machine Learning,Cancelled,LinkedIn,2023-05-10,2023-07-16,,104134.85,39,EMP0141,Medium
+JOB0037,Data Scientist,DEP002,Lead,Machine Learning,Hired,LinkedIn,2023-05-01,2023-08-03,2023-06-29,65585.94,23,EMP0119,Medium
+JOB0038,Financial Analyst,DEP005,Lead,SAP,Technical Test,Indeed,2023-08-18,2023-09-20,,71176.41,27,EMP0109,Medium
+JOB0039,Data Engineer,DEP010,Junior,SAP,Hired,Job Fair,2024-11-04,2025-01-05,2025-02-06,49849,17,EMP0132,Low
+JOB0040,Cloud Architect,DEP008,Mid,SQL,Technical Test,Agency,2024-05-27,2024-09-09,,116525.87,13,EMP0073,Medium
+JOB0041,Project Manager,DEP009,Junior,Java,Open,Company Website,2024-11-27,2025-01-20,,81210.43,21,EMP0063,High
+JOB0042,Data Scientist,DEP005,Junior,Java,Cancelled,Indeed,2024-01-24,2024-04-10,,84415.9,8,EMP0122,High
+JOB0043,Business Analyst,DEP005,Mid,AWS,Screening,Referral,2024-04-16,2024-06-19,,120505.45,33,EMP0076,High
+JOB0044,Financial Analyst,DEP006,Junior,AWS,Screening,Indeed,2023-05-22,2023-07-31,,55495.13,24,EMP0067,High
+JOB0045,Data Scientist,DEP002,Mid,Python,Technical Test,Agency,2023-01-28,2023-05-19,,45984.33,9,EMP0064,Medium
+JOB0046,Scrum Master,DEP010,Mid,AWS,Screening,LinkedIn,2023-02-03,2023-04-20,,128110.52,22,EMP0068,High
+JOB0047,HR Consultant,DEP008,Mid,SQL,Technical Test,Job Fair,2023-09-08,2023-11-23,,56567.58,30,EMP0031,High
+JOB0048,HR Consultant,DEP002,Senior,SQL,Cancelled,Job Fair,2023-11-17,2024-03-11,,57041.87,8,EMP0137,High
+JOB0049,Sales Manager,DEP006,Mid,Kubernetes,Screening,Company Website,2023-11-21,2024-02-27,,55816.45,26,EMP0016,Medium
+JOB0050,Project Manager,DEP010,Junior,AWS,Technical Test,Indeed,2024-11-03,2025-01-11,,56353.14,25,EMP0143,Medium
+JOB0051,Business Analyst,DEP006,Senior,AWS,Interview,Company Website,2023-07-31,2023-11-23,,89019.08,24,EMP0008,Low
+JOB0052,Cloud Architect,DEP006,Junior,Machine Learning,Open,Indeed,2024-05-24,2024-09-16,,75660.54,21,EMP0034,Medium
+JOB0053,Project Manager,DEP008,Senior,SQL,Interview,Company Website,2024-05-09,2024-07-10,,78194.06,40,EMP0063,High
+JOB0054,HR Consultant,DEP005,Junior,Kubernetes,Hired,Company Website,2023-02-19,2023-05-15,2023-05-09,119272.13,11,EMP0100,High
+JOB0055,HR Consultant,DEP003,Senior,React,Cancelled,Indeed,2024-11-18,2025-02-14,,87231.32,40,EMP0059,Medium
+JOB0056,Frontend Developer,DEP006,Lead,Python,Hired,Company Website,2023-10-25,2024-02-15,2023-12-15,56875.65,4,EMP0066,High
+JOB0057,DevOps Engineer,DEP006,Lead,Python,Screening,LinkedIn,2023-12-29,2024-02-22,,109231.62,6,EMP0147,Low
+JOB0058,Data Engineer,DEP004,Lead,Python,Open,Agency,2024-10-09,2024-12-10,,92911.63,28,EMP0035,Medium
+JOB0059,Data Scientist,DEP008,Lead,Python,Screening,Indeed,2023-05-08,2023-09-02,,56194.18,6,EMP0060,Medium
+JOB0060,Financial Analyst,DEP010,Senior,SQL,Screening,Indeed,2024-11-21,2025-03-12,,84093.98,39,EMP0092,High
+JOB0061,Business Analyst,DEP007,Senior,Kubernetes,Open,Job Fair,2024-05-26,2024-09-08,,67317.89,22,EMP0091,Medium
+JOB0062,Sales Manager,DEP008,Lead,SAP,Offer,Job Fair,2023-04-29,2023-06-20,,54281.54,21,EMP0037,Medium
+JOB0063,Data Scientist,DEP009,Senior,Python,Screening,Indeed,2023-05-29,2023-09-23,,63128.57,16,EMP0101,Low
+JOB0064,DevOps Engineer,DEP008,Senior,Python,Interview,Job Fair,2024-04-17,2024-07-08,,68525.7,5,EMP0072,Medium
+JOB0065,HR Consultant,DEP006,Mid,Kubernetes,Technical Test,Indeed,2023-04-12,2023-05-22,,87894.48,10,EMP0005,Medium
+JOB0066,DevOps Engineer,DEP003,Junior,Machine Learning,Interview,Job Fair,2024-09-09,2024-10-29,,69816.06,24,EMP0092,High
+JOB0067,Frontend Developer,DEP003,Lead,SQL,Interview,Indeed,2024-03-06,2024-06-06,,62533.63,16,EMP0082,Medium
+JOB0068,Business Analyst,DEP004,Mid,Machine Learning,Hired,Company Website,2024-04-12,2024-06-05,2024-06-09,96672.45,40,EMP0048,High
+JOB0069,Sales Manager,DEP002,Junior,Machine Learning,Open,Agency,2023-05-22,2023-08-08,,109310.18,7,EMP0066,High
+JOB0070,Scrum Master,DEP005,Lead,React,Cancelled,Indeed,2024-06-18,2024-09-05,,119339.84,7,EMP0093,Low
+JOB0071,Cloud Architect,DEP004,Mid,Python,Open,Company Website,2023-01-27,2023-04-12,,93262.56,15,EMP0017,Medium
+JOB0072,Business Analyst,DEP001,Junior,Machine Learning,Technical Test,Company Website,2024-08-04,2024-10-19,,62815.36,17,EMP0120,Medium
+JOB0073,Business Analyst,DEP002,Mid,SQL,Cancelled,LinkedIn,2024-09-18,2024-12-17,,108076.53,36,EMP0088,High
+JOB0074,DevOps Engineer,DEP008,Junior,AWS,Technical Test,Agency,2024-01-18,2024-05-04,,91249.41,4,EMP0001,Medium
+JOB0075,Cloud Architect,DEP003,Lead,Java,Screening,Indeed,2024-07-28,2024-11-18,,125220.22,10,EMP0134,Medium
+JOB0076,Project Manager,DEP006,Senior,Kubernetes,Screening,LinkedIn,2024-09-02,2024-12-23,,56169.42,16,EMP0020,Low
+JOB0077,Data Engineer,DEP010,Junior,Machine Learning,Interview,Referral,2024-04-20,2024-07-03,,82865.78,4,EMP0051,High
+JOB0078,Senior Developer,DEP009,Junior,SQL,Interview,LinkedIn,2023-02-28,2023-05-24,,84512.84,3,EMP0044,Low
+JOB0079,Financial Analyst,DEP005,Junior,Machine Learning,Open,Company Website,2023-08-15,2023-09-17,,98148.24,30,EMP0127,Medium
+JOB0080,Frontend Developer,DEP008,Senior,Python,Screening,Company Website,2024-11-30,2025-03-09,,73796.26,9,EMP0078,Medium

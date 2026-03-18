@@ -1,0 +1,1 @@
+"""Impact propagation engine."""

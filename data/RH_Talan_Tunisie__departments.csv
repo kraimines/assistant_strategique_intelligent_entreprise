@@ -1,0 +1,12 @@
+﻿  hr_departments  ·  10 lignes  ·  6 colonnes,Unnamed: 1,Unnamed: 2,Unnamed: 3,Unnamed: 4,Unnamed: 5
+department_id,department_name,cost_center,location,budget,manager_id
+DEP001,Digital & Innovation,CC1001,Tunis,6500000,EMP0002
+DEP002,Business Development,CC1002,Tunis,3200000,EMP0001
+DEP003,Finance & Administration,CC1003,Tunis,2100000,EMP0012
+DEP004,Ressources Humaines,CC1004,Tunis,1800000,EMP0014
+DEP005,Delivery & Operations,CC1005,Tunis,5800000,EMP0011
+DEP006,Data & IA,CC1006,Tunis,4200000,EMP0015
+DEP007,Cloud & Infrastructure,CC1007,Sfax,3700000,EMP0006
+DEP008,Conseil SAP & ERP,CC1008,Tunis,5100000,EMP0007
+DEP009,Cybersecurite,CC1009,Tunis,2900000,EMP0018
+DEP010,Direction Generale,CC1010,Tunis,8000000,EMP0014

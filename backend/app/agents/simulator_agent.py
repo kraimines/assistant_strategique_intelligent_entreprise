@@ -1,0 +1,1 @@
+"""Strategic simulation agent."""

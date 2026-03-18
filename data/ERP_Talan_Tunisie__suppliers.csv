@@ -1,0 +1,122 @@
+﻿  erp_suppliers  ·  120 lignes  ·  9 colonnes,Unnamed: 1,Unnamed: 2,Unnamed: 3,Unnamed: 4,Unnamed: 5,Unnamed: 6,Unnamed: 7,Unnamed: 8
+supplier_id,name,country,category,contact_email,phone,rating,payment_terms,created_at
+SUP0001,Salesforce Inc.,USA,CRM et Cloud,contact@salesforcein.com,+20 146 238 5330,4.7,Net 45,2019-06-10
+SUP0002,HP Enterprise,USA,Materiel Informatique,contact@hpenterprise.com,+8 407 134 3130,3,Net 60,2020-01-09
+SUP0003,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+33 908 173 7738,4.3,Net 60,2019-11-26
+SUP0004,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+43 494 300 6293,3.5,Net 60,2017-02-08
+SUP0005,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+37 486 715 6463,2.3,Net 45,2020-08-21
+SUP0006,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+32 570 458 9588,3.1,Immediate,2017-04-10
+SUP0007,Salesforce Inc.,USA,CRM et Cloud,contact@salesforcein.com,+48 532 320 5157,2.9,Net 90,2018-03-09
+SUP0008,Sophos,UK,Cybersecurite,contact@sophos.com,+48 835 350 4811,2.3,Net 30,2020-10-12
+SUP0009,VMware,USA,Virtualisation,contact@vmware.com,+46 962 860 1783,3.3,Net 60,2021-09-13
+SUP0010,ServiceNow,USA,ITSM Platform,contact@servicenow.com,+28 277 791 7774,4.7,Immediate,2018-05-17
+SUP0011,Dell Technologies,USA,Materiel Informatique,contact@delltechnolo.com,+39 600 933 9124,2.8,Immediate,2021-05-03
+SUP0012,Datadog Inc.,USA,Monitoring,contact@datadoginc.com,+19 959 614 6476,2.4,Net 90,2021-10-04
+SUP0013,HashiCorp,USA,DevOps Tools,contact@hashicorp.com,+30 529 670 8787,2.8,Net 90,2021-11-22
+SUP0014,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+39 555 459 4272,2.9,Net 30,2018-10-12
+SUP0015,Microsoft Corp.,USA,Software et Cloud,contact@microsoftcor.com,+3 758 834 1762,3.7,Net 90,2021-02-21
+SUP0016,Splunk,USA,SIEM et Analytics,contact@splunk.com,+10 347 862 5759,4.2,Net 90,2018-05-16
+SUP0017,Salesforce Inc.,USA,CRM et Cloud,contact@salesforcein.com,+13 985 793 3132,4.8,Immediate,2017-03-07
+SUP0018,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+48 180 171 1981,4.2,Net 90,2020-04-12
+SUP0019,Dynatrace,Autriche,Observability,contact@dynatrace.com,+49 712 613 7538,4.5,Net 30,2017-06-27
+SUP0020,Cisco Systems,USA,Reseau et Securite,contact@ciscosystems.com,+26 536 178 6111,4.2,Immediate,2019-07-08
+SUP0021,Microsoft Corp.,USA,Software et Cloud,contact@microsoftcor.com,+32 784 100 5598,4.2,Net 45,2019-04-23
+SUP0022,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+24 829 236 7043,3.2,Net 45,2020-04-15
+SUP0023,VMware,USA,Virtualisation,contact@vmware.com,+45 338 808 4793,2,Net 60,2020-03-22
+SUP0024,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+31 796 347 9765,3.3,Net 60,2017-05-18
+SUP0025,Microsoft Corp.,USA,Software et Cloud,contact@microsoftcor.com,+25 133 415 8938,2.9,Net 60,2018-03-13
+SUP0026,SAP SE,Allemagne,ERP et Software,contact@sapse.com,+17 566 406 5955,4.5,Net 30,2018-01-20
+SUP0027,Atlassian,Australie,Dev Tools,contact@atlassian.com,+44 270 839 4701,4.3,Immediate,2020-08-14
+SUP0028,Dynatrace,Autriche,Observability,contact@dynatrace.com,+32 590 409 2564,2.6,Net 60,2019-01-21
+SUP0029,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+13 373 528 6214,3.6,Net 30,2018-12-17
+SUP0030,Dell Technologies,USA,Materiel Informatique,contact@delltechnolo.com,+8 600 663 6371,3,Net 45,2021-07-11
+SUP0031,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+36 484 438 6914,4.4,Net 30,2019-02-11
+SUP0032,GitLab Inc.,USA,Dev Tools,contact@gitlabinc.com,+38 325 418 9724,4.3,Net 45,2017-07-07
+SUP0033,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+25 293 365 3082,4.1,Net 60,2018-10-01
+SUP0034,Sophos,UK,Cybersecurite,contact@sophos.com,+16 881 967 1852,4.5,Net 30,2017-12-22
+SUP0035,Atlassian,Australie,Dev Tools,contact@atlassian.com,+6 402 841 7579,2.3,Net 60,2017-06-21
+SUP0036,ServiceNow,USA,ITSM Platform,contact@servicenow.com,+21 328 139 4109,2.2,Net 90,2018-08-31
+SUP0037,Cisco Systems,USA,Reseau et Securite,contact@ciscosystems.com,+40 858 517 6907,3.8,Net 90,2020-09-21
+SUP0038,SAP SE,Allemagne,ERP et Software,contact@sapse.com,+20 433 410 2960,4.3,Net 60,2020-05-08
+SUP0039,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+10 156 526 6026,4.1,Net 45,2021-02-11
+SUP0040,VMware,USA,Virtualisation,contact@vmware.com,+45 730 195 1282,2.2,Net 45,2020-07-27
+SUP0041,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+27 944 615 3063,2.5,Net 30,2020-07-20
+SUP0042,HP Enterprise,USA,Materiel Informatique,contact@hpenterprise.com,+37 897 490 3392,2.1,Net 60,2020-07-17
+SUP0043,Dell Technologies,USA,Materiel Informatique,contact@delltechnolo.com,+15 242 777 6762,3.5,Net 60,2020-02-03
+SUP0044,Atlassian,Australie,Dev Tools,contact@atlassian.com,+42 776 574 5379,3.7,Net 45,2019-10-08
+SUP0045,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+10 724 458 2447,2.9,Net 60,2021-01-08
+SUP0046,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+41 628 509 1261,4.4,Net 30,2018-08-13
+SUP0047,Dell Technologies,USA,Materiel Informatique,contact@delltechnolo.com,+20 588 369 8391,4.9,Immediate,2020-11-19
+SUP0048,Atlassian,Australie,Dev Tools,contact@atlassian.com,+41 614 846 9274,3,Immediate,2020-11-09
+SUP0049,Microsoft Corp.,USA,Software et Cloud,contact@microsoftcor.com,+28 924 237 4613,3.5,Immediate,2019-12-24
+SUP0050,Datadog Inc.,USA,Monitoring,contact@datadoginc.com,+40 738 949 4893,2.2,Immediate,2020-09-11
+SUP0051,Salesforce Inc.,USA,CRM et Cloud,contact@salesforcein.com,+7 918 844 4170,3.7,Net 30,2018-07-27
+SUP0052,Datadog Inc.,USA,Monitoring,contact@datadoginc.com,+49 691 730 1252,2.6,Net 30,2018-03-01
+SUP0053,HashiCorp,USA,DevOps Tools,contact@hashicorp.com,+36 272 835 5748,2.9,Net 45,2020-12-27
+SUP0054,GitLab Inc.,USA,Dev Tools,contact@gitlabinc.com,+15 415 551 3099,3.7,Net 45,2019-01-05
+SUP0055,Cisco Systems,USA,Reseau et Securite,contact@ciscosystems.com,+22 846 326 3065,4,Immediate,2019-10-08
+SUP0056,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+34 866 888 7780,4.5,Net 90,2019-02-18
+SUP0057,Sophos,UK,Cybersecurite,contact@sophos.com,+43 647 779 4040,4.6,Net 60,2019-12-13
+SUP0058,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+16 482 314 1683,3.3,Net 45,2019-11-20
+SUP0059,Atlassian,Australie,Dev Tools,contact@atlassian.com,+41 607 614 1302,3.8,Immediate,2018-07-25
+SUP0060,Salesforce Inc.,USA,CRM et Cloud,contact@salesforcein.com,+37 433 950 8781,3,Net 30,2018-04-19
+SUP0061,HashiCorp,USA,DevOps Tools,contact@hashicorp.com,+44 906 826 6402,3.8,Net 60,2019-10-28
+SUP0062,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+6 802 165 5769,4.9,Immediate,2020-11-01
+SUP0063,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+48 767 220 9077,3.3,Net 90,2018-04-04
+SUP0064,Atlassian,Australie,Dev Tools,contact@atlassian.com,+42 546 418 2828,3.8,Immediate,2019-12-21
+SUP0065,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+23 854 616 4009,2.2,Net 30,2019-03-23
+SUP0066,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+41 258 276 5600,2.4,Net 45,2018-07-30
+SUP0067,Splunk,USA,SIEM et Analytics,contact@splunk.com,+25 520 666 1799,3.7,Net 45,2021-04-19
+SUP0068,HP Enterprise,USA,Materiel Informatique,contact@hpenterprise.com,+18 108 912 4342,2.6,Net 90,2020-02-08
+SUP0069,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+26 509 864 8962,2.3,Net 90,2018-10-31
+SUP0070,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+26 141 729 8166,3.5,Net 90,2021-03-12
+SUP0071,ServiceNow,USA,ITSM Platform,contact@servicenow.com,+48 311 504 5897,3.9,Net 30,2017-08-08
+SUP0072,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+41 799 257 9213,3.1,Net 30,2017-12-16
+SUP0073,Atlassian,Australie,Dev Tools,contact@atlassian.com,+2 789 609 8438,3,Net 90,2020-01-30
+SUP0074,VMware,USA,Virtualisation,contact@vmware.com,+39 479 507 8826,3.9,Net 90,2018-08-14
+SUP0075,Atlassian,Australie,Dev Tools,contact@atlassian.com,+31 950 451 2346,4,Net 45,2020-11-28
+SUP0076,ServiceNow,USA,ITSM Platform,contact@servicenow.com,+24 170 256 5543,2.9,Net 90,2020-05-22
+SUP0077,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+40 654 282 9519,4.3,Net 60,2019-11-26
+SUP0078,GitLab Inc.,USA,Dev Tools,contact@gitlabinc.com,+28 458 488 6230,3.7,Net 30,2019-09-13
+SUP0079,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+14 753 955 6012,2.7,Immediate,2020-01-05
+SUP0080,Sophos,UK,Cybersecurite,contact@sophos.com,+12 244 843 1043,4.5,Net 90,2021-04-22
+SUP0081,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+23 315 468 8599,3.4,Net 30,2020-09-21
+SUP0082,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+15 884 394 5306,2.7,Net 30,2021-08-04
+SUP0083,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+24 579 612 6517,3.2,Net 30,2018-04-03
+SUP0084,Datadog Inc.,USA,Monitoring,contact@datadoginc.com,+42 483 578 4506,3.9,Net 90,2017-11-07
+SUP0085,Cisco Systems,USA,Reseau et Securite,contact@ciscosystems.com,+2 954 893 6636,3.5,Net 45,2018-09-10
+SUP0086,SAP SE,Allemagne,ERP et Software,contact@sapse.com,+10 906 643 5300,3.9,Net 30,2021-05-10
+SUP0087,Palo Alto Networks,USA,Cybersecurite,contact@paloaltonetw.com,+1 407 118 8618,2.3,Immediate,2021-07-11
+SUP0088,Sophos,UK,Cybersecurite,contact@sophos.com,+45 351 397 3039,3.7,Net 90,2020-03-17
+SUP0089,Atlassian,Australie,Dev Tools,contact@atlassian.com,+26 137 225 8560,2.1,Net 45,2021-08-16
+SUP0090,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+2 774 966 1644,4.3,Immediate,2021-03-16
+SUP0091,Datadog Inc.,USA,Monitoring,contact@datadoginc.com,+32 656 542 3917,4.8,Net 90,2018-10-05
+SUP0092,Microsoft Corp.,USA,Software et Cloud,contact@microsoftcor.com,+43 662 889 7950,3.3,Net 60,2018-12-24
+SUP0093,Splunk,USA,SIEM et Analytics,contact@splunk.com,+23 820 639 7676,2.1,Net 30,2019-07-20
+SUP0094,Salesforce Inc.,USA,CRM et Cloud,contact@salesforcein.com,+14 336 920 6659,4.5,Net 60,2020-06-07
+SUP0095,HashiCorp,USA,DevOps Tools,contact@hashicorp.com,+11 604 750 6075,4.9,Net 60,2019-06-05
+SUP0096,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+5 811 374 9522,4.9,Net 60,2020-12-11
+SUP0097,Dell Technologies,USA,Materiel Informatique,contact@delltechnolo.com,+41 547 963 6976,3.7,Net 60,2019-03-10
+SUP0098,GitLab Inc.,USA,Dev Tools,contact@gitlabinc.com,+27 342 846 8714,4.4,Net 90,2020-12-20
+SUP0099,Oracle Corp.,USA,Software et Cloud,contact@oraclecorp.com,+38 206 190 3068,4,Net 60,2021-06-20
+SUP0100,SAP SE,Allemagne,ERP et Software,contact@sapse.com,+25 184 210 9015,4.4,Net 45,2020-03-08
+SUP0101,Splunk,USA,SIEM et Analytics,contact@splunk.com,+29 370 744 5470,3.1,Net 90,2020-12-04
+SUP0102,Dell Technologies,USA,Materiel Informatique,contact@delltechnolo.com,+8 633 199 9721,4,Net 90,2017-06-24
+SUP0103,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+10 159 311 9845,2.3,Net 45,2018-03-20
+SUP0104,Datadog Inc.,USA,Monitoring,contact@datadoginc.com,+32 182 366 7258,4,Net 60,2017-02-27
+SUP0105,HashiCorp,USA,DevOps Tools,contact@hashicorp.com,+4 199 213 4024,3.3,Net 45,2018-03-01
+SUP0106,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+19 579 594 1757,4.2,Net 30,2019-05-14
+SUP0107,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+25 247 858 7114,2,Immediate,2020-09-01
+SUP0108,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+3 388 658 9577,4.5,Immediate,2020-02-23
+SUP0109,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+15 145 331 3651,3.2,Net 90,2020-09-02
+SUP0110,Atlassian,Australie,Dev Tools,contact@atlassian.com,+7 702 727 2365,3.2,Net 90,2021-01-10
+SUP0111,HP Enterprise,USA,Materiel Informatique,contact@hpenterprise.com,+37 133 678 8971,3.9,Net 60,2018-09-04
+SUP0112,Nutanix,USA,Infrastructure HCI,contact@nutanix.com,+5 855 984 7123,3.7,Net 30,2018-01-20
+SUP0113,HP Enterprise,USA,Materiel Informatique,contact@hpenterprise.com,+30 383 279 2931,4.9,Net 60,2017-05-18
+SUP0114,GitLab Inc.,USA,Dev Tools,contact@gitlabinc.com,+9 278 215 7937,3.7,Net 30,2020-02-02
+SUP0115,Splunk,USA,SIEM et Analytics,contact@splunk.com,+39 337 303 7030,3.6,Net 45,2021-08-22
+SUP0116,ServiceNow,USA,ITSM Platform,contact@servicenow.com,+16 922 434 2383,3.4,Net 90,2018-06-04
+SUP0117,Cisco Systems,USA,Reseau et Securite,contact@ciscosystems.com,+48 183 411 1771,4.7,Net 30,2017-11-05
+SUP0118,AWS Amazon,USA,Cloud Infrastructure,contact@awsamazon.com,+33 750 696 8900,3.7,Net 30,2018-03-28
+SUP0119,GitLab Inc.,USA,Dev Tools,contact@gitlabinc.com,+6 977 597 1439,2.6,Net 90,2019-04-22
+SUP0120,OVHcloud,France,Cloud Infrastructure,contact@ovhcloud.com,+45 491 104 6406,2.3,Immediate,2018-06-03

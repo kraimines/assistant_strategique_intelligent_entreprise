@@ -1,0 +1,152 @@
+﻿  hr_employees  ·  150 lignes  ·  13 colonnes,Unnamed: 1,Unnamed: 2,Unnamed: 3,Unnamed: 4,Unnamed: 5,Unnamed: 6,Unnamed: 7,Unnamed: 8,Unnamed: 9,Unnamed: 10,Unnamed: 11,Unnamed: 12,Unnamed: 13,Unnamed: 14
+employee_id,first_name,last_name,email,phone,role,department_id,hire_date,salary,manager_id,contract_type,country,city,hourly_cost,capacity_hours_per_week
+EMP0001,Fatma,Haddad,fatma.haddad@talan.com.tn,+216 24 394 818,Responsable Compte,DEP005,2015-07-16,23924.98,,Fixed-Term,Tunisie,Nabeul,11.5,40
+EMP0002,Wassim,Hammami,wassim.hammami@talan.com.tn,+216 20 661 620,Ingenieur DevOps,DEP010,2021-12-15,126901.37,,Permanent,Tunisie,Tunis,61.01,32
+EMP0003,Bilel,Ferjani,bilel.ferjani@talan.com.tn,+216 50 245 352,Developpeur Full-Stack,DEP010,2016-09-23,54544.07,,Permanent,Tunisie,Tunis,26.22,37
+EMP0004,Houssem,Ben Ali,houssem.ben-ali@talan.com.tn,+216 92 636 665,Data Engineer,DEP007,2017-08-09,128577.31,,Fixed-Term,Tunisie,Ariana,61.82,37
+EMP0005,Afef,Kchaou,afef.kchaou@talan.com.tn,+216 24 371 410,Consultant,DEP006,2020-04-30,67063.58,,Permanent,Tunisie,Manouba,32.24,40
+EMP0006,Houssem,Karray,houssem.karray@talan.com.tn,+216 92 860 493,Directeur de Pole,DEP008,2020-09-21,67458.94,,Permanent,Tunisie,Bizerte,32.43,40
+EMP0007,Walid,Ncibi,walid.ncibi@talan.com.tn,+216 22 957 453,Ingenieur Logiciel,DEP009,2020-04-05,76080.17,,Permanent,Tunisie,Tunis,36.58,40
+EMP0008,Chaima,Zouari,chaima.zouari@talan.com.tn,+216 20 603 333,Architecte Solution,DEP009,2022-12-02,94982.09,,Permanent,Tunisie,Bizerte,45.66,35
+EMP0009,Sarra,Bettaieb,sarra.bettaieb@talan.com.tn,+216 98 766 167,Developpeur Full-Stack,DEP002,2017-01-05,74030.47,,Fixed-Term,Tunisie,Manouba,35.59,40
+EMP0010,Sofiene,Mabrouk,sofiene.mabrouk@talan.com.tn,+216 98 408 347,VP,DEP008,2021-04-19,79025.71,,Fixed-Term,Tunisie,Ariana,37.99,32
+EMP0011,Nour,Jebali,nour.jebali@talan.com.tn,+216 99 138 229,Senior Manager,DEP001,2023-06-16,84339.5,,Contractor,Tunisie,Tunis,40.55,37
+EMP0012,Mariem,Ncibi,mariem.ncibi@talan.com.tn,+216 95 930 910,Developpeur Full-Stack,DEP008,2015-11-15,60846.92,,Fixed-Term,Tunisie,Ben Arous,29.25,40
+EMP0013,Emna,Bchir,emna.bchir@talan.com.tn,+216 22 463 674,Directeur General Adjoint,DEP006,2021-05-15,30926.26,,Permanent,Tunisie,Tunis,14.87,32
+EMP0014,Wassim,Sghaier,wassim.sghaier@talan.com.tn,+216 24 758 463,Senior Manager,DEP010,2019-05-10,42907.23,,Fixed-Term,Tunisie,Manouba,20.63,37
+EMP0015,Nacer,Ferjani,nacer.ferjani@talan.com.tn,+216 21 166 115,Ingenieur DevOps,DEP002,2022-11-13,59664.56,,Permanent,Tunisie,Nabeul,28.68,40
+EMP0016,Oussama,Amri,oussama.amri@talan.com.tn,+216 26 841 852,Manager,DEP003,2020-04-13,122051.1,,Permanent,Tunisie,Tunis,58.68,40
+EMP0017,Walid,Brahim,walid.brahim@talan.com.tn,+216 20 561 307,Developpeur Backend,DEP003,2017-06-08,94888.83,,Contractor,Tunisie,Sousse,45.62,37
+EMP0018,Chaima,Fehri,chaima.fehri@talan.com.tn,+216 99 880 569,Chef de Projet,DEP001,2018-10-09,99664.95,,Fixed-Term,Tunisie,Nabeul,47.92,40
+EMP0019,Karim,Fehri,karim.fehri@talan.com.tn,+216 98 750 835,Developpeur Backend,DEP006,2017-02-13,103812.18,,Permanent,Tunisie,Tunis,49.91,40
+EMP0020,Asma,Jebali,asma.jebali@talan.com.tn,+216 20 321 845,Consultant,DEP006,2023-01-13,27051.43,,Contractor,Tunisie,Bizerte,13.01,32
+EMP0021,Kais,Ben Salem,kais.ben-salem@talan.com.tn,+216 21 721 325,Senior Manager,DEP004,2021-11-27,89098.47,EMP0004,Fixed-Term,Tunisie,Bizerte,42.84,40
+EMP0022,Aymen,Hammami,aymen.hammami@talan.com.tn,+216 24 755 541,VP,DEP010,2018-05-11,113254.02,EMP0015,Permanent,Tunisie,Manouba,54.45,40
+EMP0023,Zied,Kchaou,zied.kchaou@talan.com.tn,+216 25 228 981,Manager,DEP008,2021-06-14,50413.2,EMP0009,Fixed-Term,Tunisie,Nabeul,24.24,37
+EMP0024,Sarra,Oueslati,sarra.oueslati@talan.com.tn,+216 95 395 954,Ingenieur Senior,DEP009,2022-05-14,78782.43,EMP0002,Fixed-Term,Tunisie,Ben Arous,37.88,37
+EMP0025,Imen,Ben Romdhane,imen.ben-romdhane@talan.com.tn,+216 20 888 951,Directeur General Adjoint,DEP008,2018-07-10,54637.86,EMP0016,Contractor,Tunisie,Tunis,26.27,45
+EMP0026,Salma,Jlassi,salma.jlassi@talan.com.tn,+216 21 408 157,Ingenieur Logiciel,DEP010,2023-05-02,89362.27,EMP0009,Permanent,Tunisie,Bizerte,42.96,37
+EMP0027,Fatma,Cherni,fatma.cherni@talan.com.tn,+216 21 803 355,Developpeur Backend,DEP004,2017-07-30,112794.92,EMP0001,Permanent,Tunisie,Ben Arous,54.23,35
+EMP0028,Tarek,Souissi,tarek.souissi@talan.com.tn,+216 90 968 480,Chef de Projet,DEP005,2016-11-06,36753.1,EMP0001,Fixed-Term,Tunisie,Sfax,17.67,35
+EMP0029,Amine,Ben Slama,amine.ben-slama@talan.com.tn,+216 98 882 239,Consultant,DEP007,2015-05-18,41604.8,EMP0007,Permanent,Tunisie,Tunis,20,40
+EMP0030,Wassim,Oueslati,wassim.oueslati@talan.com.tn,+216 52 687 456,Ingenieur DevOps,DEP005,2021-11-26,119928.67,EMP0010,Fixed-Term,Tunisie,Tunis,57.66,40
+EMP0031,Ghassen,Mahfoudhi,ghassen.mahfoudhi@talan.com.tn,+216 24 807 132,Developpeur Full-Stack,DEP006,2016-11-23,118550.18,EMP0003,Fixed-Term,Tunisie,Ariana,57,40
+EMP0032,Sarra,Ncibi,sarra.ncibi@talan.com.tn,+216 53 689 943,VP,DEP003,2017-07-15,43963.54,EMP0016,Contractor,Tunisie,Tunis,21.14,40
+EMP0033,Salma,Chebbi,salma.chebbi@talan.com.tn,+216 55 649 961,Directeur General Adjoint,DEP001,2015-07-18,37557.31,EMP0011,Fixed-Term,Tunisie,Nabeul,18.06,40
+EMP0034,Nacer,Bettaieb,nacer.bettaieb@talan.com.tn,+216 26 782 524,Senior Consultant,DEP008,2016-10-01,98250.99,EMP0009,Permanent,Tunisie,Tunis,47.24,45
+EMP0035,Emna,Haddad,emna.haddad@talan.com.tn,+216 50 281 624,Developpeur Backend,DEP006,2023-01-21,124804.25,EMP0018,Contractor,Tunisie,Tunis,60,40
+EMP0036,Hamza,Zouari,hamza.zouari@talan.com.tn,+216 50 590 961,Ingenieur Senior,DEP004,2020-08-27,93567.57,EMP0015,Permanent,Tunisie,Tunis,44.98,40
+EMP0037,Slim,Sghaier,slim.sghaier@talan.com.tn,+216 22 498 824,Lead Consultant,DEP005,2022-04-09,137905.64,EMP0014,Permanent,Tunisie,Ben Arous,66.3,40
+EMP0038,Wassim,Mellouli,wassim.mellouli@talan.com.tn,+216 92 837 366,VP,DEP008,2018-10-04,54014.75,EMP0005,Contractor,Tunisie,Bizerte,25.97,40
+EMP0039,Sofiene,Mellouli,sofiene.mellouli@talan.com.tn,+216 52 590 100,Senior Consultant,DEP003,2020-08-06,117478.85,EMP0014,Permanent,Tunisie,Tunis,56.48,40
+EMP0040,Bilel,Mabrouk,bilel.mabrouk@talan.com.tn,+216 25 888 131,Developpeur Full-Stack,DEP007,2023-01-23,47166.01,EMP0012,Fixed-Term,Tunisie,Sfax,22.68,40
+EMP0041,Leila,Hamdi,leila.hamdi@talan.com.tn,+216 50 337 277,Senior Manager,DEP002,2022-10-24,84948.85,EMP0013,Fixed-Term,Tunisie,Bizerte,40.84,40
+EMP0042,Yasmine,Toumi,yasmine.toumi@talan.com.tn,+216 20 263 641,Developpeur Backend,DEP010,2023-06-18,135324.27,EMP0018,Contractor,Tunisie,Ariana,65.06,32
+EMP0043,Ghassen,Jlassi,ghassen.jlassi@talan.com.tn,+216 27 406 361,Senior Manager,DEP003,2016-11-21,23809.01,EMP0020,Fixed-Term,Tunisie,Tunis,11.45,37
+EMP0044,Zied,Ben Slama,zied.ben-slama@talan.com.tn,+216 53 502 467,Directeur de Pole,DEP006,2015-06-26,97124.56,EMP0002,Fixed-Term,Tunisie,Nabeul,46.69,37
+EMP0045,Asma,Zouari,asma.zouari@talan.com.tn,+216 90 265 371,Chef de Projet,DEP010,2021-07-01,104627.98,EMP0020,Contractor,Tunisie,Ben Arous,50.3,35
+EMP0046,Yassine,Dridi,yassine.dridi@talan.com.tn,+216 55 901 269,Senior Manager,DEP006,2019-06-09,77139.83,EMP0002,Fixed-Term,Tunisie,Sfax,37.09,37
+EMP0047,Yassine,Ayadi,yassine.ayadi@talan.com.tn,+216 20 259 660,Responsable Compte,DEP008,2021-06-08,54755.92,EMP0018,Contractor,Tunisie,Sousse,26.32,35
+EMP0048,Salma,Guesmi,salma.guesmi@talan.com.tn,+216 95 575 384,Lead Consultant,DEP008,2016-10-28,92269.1,EMP0012,Permanent,Tunisie,Ariana,44.36,37
+EMP0049,Aziz,Ben Youssef,aziz.ben-youssef@talan.com.tn,+216 98 744 426,Data Scientist,DEP008,2018-12-18,52666.22,EMP0004,Permanent,Tunisie,Manouba,25.32,40
+EMP0050,Khaled,Haddad,khaled.haddad@talan.com.tn,+216 25 435 680,Senior Manager,DEP005,2016-07-27,75614.53,EMP0001,Fixed-Term,Tunisie,Sousse,36.35,40
+EMP0051,Mariem,Guizani,mariem.guizani@talan.com.tn,+216 24 807 731,Responsable Compte,DEP006,2018-02-01,90098.56,EMP0009,Fixed-Term,Tunisie,Tunis,43.32,40
+EMP0052,Khaled,Ben Fredj,khaled.ben-fredj@talan.com.tn,+216 21 615 508,Ingenieur Logiciel,DEP002,2022-08-06,113226.61,EMP0018,Permanent,Tunisie,Sfax,54.44,37
+EMP0053,Fares,Sghaier,fares.sghaier@talan.com.tn,+216 24 914 578,Data Engineer,DEP001,2020-05-28,78475.99,EMP0011,Permanent,Tunisie,Tunis,37.73,37
+EMP0054,Amine,Ben Youssef,amine.ben-youssef@talan.com.tn,+216 26 612 220,Data Engineer,DEP003,2017-02-18,63738.79,EMP0010,Permanent,Tunisie,Ariana,30.64,45
+EMP0055,Aymen,Ben Youssef,aymen.ben-youssef@talan.com.tn,+216 90 438 891,Developpeur Full-Stack,DEP004,2016-10-10,141361.99,EMP0010,Permanent,Tunisie,Manouba,67.96,40
+EMP0056,Sarra,Sghaier,sarra.sghaier@talan.com.tn,+216 92 644 423,Directeur de Pole,DEP004,2019-02-02,80134.94,EMP0006,Contractor,Tunisie,Manouba,38.53,40
+EMP0057,Wassim,Zouari,wassim.zouari@talan.com.tn,+216 53 320 820,Developpeur Full-Stack,DEP004,2019-12-02,51601.56,EMP0007,Permanent,Tunisie,Tunis,24.81,37
+EMP0058,Leila,Mansouri,leila.mansouri@talan.com.tn,+216 22 191 329,Senior Manager,DEP009,2019-07-23,84250.73,EMP0002,Permanent,Tunisie,Ariana,40.51,40
+EMP0059,Mohamed,Rekik,mohamed.rekik@talan.com.tn,+216 27 913 495,Developpeur Full-Stack,DEP004,2020-04-07,127841.04,EMP0005,Fixed-Term,Tunisie,Ben Arous,61.46,37
+EMP0060,Wassim,Mabrouk,wassim.mabrouk@talan.com.tn,+216 25 350 829,Data Engineer,DEP006,2016-01-01,129168.39,EMP0017,Contractor,Tunisie,Ariana,62.1,40
+EMP0061,Houssem,Ben Ali,houssem.ben-ali@talan.com.tn,+216 92 335 449,Chef de Projet,DEP005,2022-02-03,29965.4,EMP0015,Contractor,Tunisie,Sfax,14.41,45
+EMP0062,Fatma,Bouzid,fatma.bouzid@talan.com.tn,+216 22 288 160,Developpeur Full-Stack,DEP003,2020-07-08,132093.72,EMP0008,Permanent,Tunisie,Ben Arous,63.51,40
+EMP0063,Imen,Bouaziz,imen.bouaziz@talan.com.tn,+216 21 188 745,Senior Consultant,DEP001,2015-10-22,30117.67,EMP0019,Permanent,Tunisie,Sfax,14.48,40
+EMP0064,Slim,Bouzid,slim.bouzid@talan.com.tn,+216 98 488 320,Ingenieur Logiciel,DEP009,2019-02-09,95319,EMP0003,Fixed-Term,Tunisie,Ben Arous,45.83,40
+EMP0065,Chaima,Bchir,chaima.bchir@talan.com.tn,+216 50 548 447,Business Analyst,DEP006,2017-06-30,129758.7,EMP0002,Permanent,Tunisie,Tunis,62.38,40
+EMP0066,Sofiene,Guesmi,sofiene.guesmi@talan.com.tn,+216 99 107 286,Ingenieur Senior,DEP005,2021-09-21,86243.36,EMP0005,Fixed-Term,Tunisie,Tunis,41.46,40
+EMP0067,Rami,Ferjani,rami.ferjani@talan.com.tn,+216 92 710 993,Manager,DEP005,2018-07-14,85669.35,EMP0008,Permanent,Tunisie,Sousse,41.19,37
+EMP0068,Lotfi,Brahim,lotfi.brahim@talan.com.tn,+216 92 426 383,Business Analyst,DEP004,2020-03-11,72908.99,EMP0007,Contractor,Tunisie,Tunis,35.05,32
+EMP0069,Yasmine,Oueslati,yasmine.oueslati@talan.com.tn,+216 25 737 246,Consultant,DEP008,2018-03-08,102323.51,EMP0006,Fixed-Term,Tunisie,Tunis,49.19,37
+EMP0070,Afef,Jlassi,afef.jlassi@talan.com.tn,+216 98 682 483,Consultant,DEP008,2020-09-19,119401.3,EMP0004,Permanent,Tunisie,Nabeul,57.4,37
+EMP0071,Emna,Zouari,emna.zouari@talan.com.tn,+216 24 595 554,Senior Consultant,DEP010,2016-10-15,56121.9,EMP0010,Contractor,Tunisie,Ben Arous,26.98,37
+EMP0072,Fatma,Oueslati,fatma.oueslati@talan.com.tn,+216 95 287 565,Manager,DEP008,2022-10-09,44340.33,EMP0003,Contractor,Tunisie,Tunis,21.32,45
+EMP0073,Khaled,Trabelsi,khaled.trabelsi@talan.com.tn,+216 99 598 711,Consultant,DEP009,2019-10-09,65817.13,EMP0017,Permanent,Tunisie,Tunis,31.64,40
+EMP0074,Karim,Ben Salem,karim.ben-salem@talan.com.tn,+216 52 648 557,Ingenieur Logiciel,DEP009,2020-02-28,132406.63,EMP0011,Permanent,Tunisie,Ben Arous,63.66,37
+EMP0075,Bilel,Tlili,bilel.tlili@talan.com.tn,+216 95 897 200,Ingenieur Logiciel,DEP007,2016-03-30,27995.54,EMP0010,Fixed-Term,Tunisie,Ben Arous,13.46,40
+EMP0076,Bilel,Rekik,bilel.rekik@talan.com.tn,+216 98 134 791,VP,DEP004,2021-07-08,95078.57,EMP0005,Fixed-Term,Tunisie,Tunis,45.71,40
+EMP0077,Karim,Ncibi,karim.ncibi@talan.com.tn,+216 95 297 224,Ingenieur Logiciel,DEP010,2022-07-22,113836.88,EMP0013,Contractor,Tunisie,Ariana,54.73,45
+EMP0078,Wassim,Khelifi,wassim.khelifi@talan.com.tn,+216 55 601 111,Developpeur Backend,DEP006,2017-07-14,112995.23,EMP0019,Fixed-Term,Tunisie,Manouba,54.32,40
+EMP0079,Dorra,Abidi,dorra.abidi@talan.com.tn,+216 90 546 421,Ingenieur Logiciel,DEP005,2016-07-19,65816.13,EMP0003,Contractor,Tunisie,Tunis,31.64,37
+EMP0080,Imen,Sassi,imen.sassi@talan.com.tn,+216 21 846 300,Data Scientist,DEP010,2023-07-27,137787.65,EMP0006,Contractor,Tunisie,Tunis,66.24,37
+EMP0081,Leila,Jlassi,leila.jlassi@talan.com.tn,+216 24 998 902,Lead Consultant,DEP003,2022-04-28,98731.08,EMP0012,Fixed-Term,Tunisie,Tunis,47.47,40
+EMP0082,Kais,Elloumi,kais.elloumi@talan.com.tn,+216 23 660 539,Ingenieur Senior,DEP009,2019-08-14,80638.21,EMP0006,Contractor,Tunisie,Bizerte,38.77,37
+EMP0083,Sami,Hammami,sami.hammami@talan.com.tn,+216 20 215 229,Lead Consultant,DEP008,2021-10-18,91218.16,EMP0012,Fixed-Term,Tunisie,Tunis,43.85,40
+EMP0084,Hedi,Zouari,hedi.zouari@talan.com.tn,+216 26 237 325,Ingenieur Senior,DEP007,2023-04-21,78291.62,EMP0010,Fixed-Term,Tunisie,Sfax,37.64,40
+EMP0085,Mehdi,Ayadi,mehdi.ayadi@talan.com.tn,+216 50 120 454,Ingenieur Logiciel,DEP003,2022-11-10,42206.05,EMP0015,Contractor,Tunisie,Tunis,20.29,40
+EMP0086,Ahmed,Cherni,ahmed.cherni@talan.com.tn,+216 21 144 885,Analyste Fonctionnel,DEP009,2023-03-17,67202.41,EMP0014,Permanent,Tunisie,Manouba,32.31,37
+EMP0087,Wael,Souissi,wael.souissi@talan.com.tn,+216 26 139 297,VP,DEP001,2019-02-24,51285.79,EMP0003,Fixed-Term,Tunisie,Tunis,24.66,45
+EMP0088,Yasmine,Gharbi,yasmine.gharbi@talan.com.tn,+216 27 717 311,Consultant,DEP001,2019-04-10,103370.06,EMP0018,Contractor,Tunisie,Ariana,49.7,40
+EMP0089,Mohamed,Souissi,mohamed.souissi@talan.com.tn,+216 26 629 871,Senior Manager,DEP001,2020-08-01,55633.32,EMP0019,Contractor,Tunisie,Sfax,26.75,35
+EMP0090,Wassim,Toumi,wassim.toumi@talan.com.tn,+216 20 288 572,Ingenieur DevOps,DEP007,2023-12-01,96406.94,EMP0019,Contractor,Tunisie,Sfax,46.35,32
+EMP0091,Walid,Hamouda,walid.hamouda@talan.com.tn,+216 50 587 460,Responsable Compte,DEP009,2019-10-02,94191.43,EMP0013,Contractor,Tunisie,Tunis,45.28,35
+EMP0092,Hedi,Elloumi,hedi.elloumi@talan.com.tn,+216 55 455 445,Architecte Solution,DEP009,2020-03-24,111145.84,EMP0011,Contractor,Tunisie,Sfax,53.44,40
+EMP0093,Walid,Chabbi,walid.chabbi@talan.com.tn,+216 27 399 117,Architecte Solution,DEP002,2020-04-04,80651.77,EMP0001,Permanent,Tunisie,Nabeul,38.77,40
+EMP0094,Fatma,Karray,fatma.karray@talan.com.tn,+216 95 207 271,Ingenieur Senior,DEP010,2017-06-02,91649.18,EMP0019,Fixed-Term,Tunisie,Nabeul,44.06,40
+EMP0095,Oussama,Bchir,oussama.bchir@talan.com.tn,+216 21 941 992,Architecte Solution,DEP009,2019-02-10,79835.52,EMP0003,Contractor,Tunisie,Nabeul,38.38,35
+EMP0096,Khaled,Guizani,khaled.guizani@talan.com.tn,+216 26 917 995,Developpeur Full-Stack,DEP006,2015-06-09,100918.32,EMP0016,Fixed-Term,Tunisie,Bizerte,48.52,40
+EMP0097,Lotfi,Khelifi,lotfi.khelifi@talan.com.tn,+216 90 916 389,Business Analyst,DEP002,2015-08-28,77824.67,EMP0006,Fixed-Term,Tunisie,Bizerte,37.42,45
+EMP0098,Sofiene,Chabbi,sofiene.chabbi@talan.com.tn,+216 55 448 290,Consultant,DEP003,2020-05-21,127271.63,EMP0006,Fixed-Term,Tunisie,Manouba,61.19,40
+EMP0099,Olfa,Ncibi,olfa.ncibi@talan.com.tn,+216 98 442 769,Manager,DEP010,2021-05-01,42778.15,EMP0003,Permanent,Tunisie,Manouba,20.57,45
+EMP0100,Walid,Hamouda,walid.hamouda@talan.com.tn,+216 52 906 760,Senior Manager,DEP002,2021-03-28,134846,EMP0014,Contractor,Tunisie,Ben Arous,64.83,40
+EMP0101,Ines,Zouari,ines.zouari@talan.com.tn,+216 98 763 606,Ingenieur DevOps,DEP010,2015-10-26,58835.89,EMP0009,Contractor,Tunisie,Nabeul,28.29,32
+EMP0102,Fares,Romdhane,fares.romdhane@talan.com.tn,+216 20 580 129,Business Analyst,DEP001,2018-02-03,25177.62,EMP0013,Fixed-Term,Tunisie,Manouba,12.1,40
+EMP0103,Maroua,Toumi,maroua.toumi@talan.com.tn,+216 50 648 719,Senior Consultant,DEP009,2015-05-10,77815.43,EMP0011,Contractor,Tunisie,Ariana,37.41,40
+EMP0104,Maroua,Amri,maroua.amri@talan.com.tn,+216 22 439 210,Consultant,DEP010,2023-04-16,23754.65,EMP0015,Fixed-Term,Tunisie,Ben Arous,11.42,40
+EMP0105,Fares,Fehri,fares.fehri@talan.com.tn,+216 20 534 828,Lead Consultant,DEP005,2022-02-28,66222.05,EMP0001,Contractor,Tunisie,Bizerte,31.84,37
+EMP0106,Lotfi,Amri,lotfi.amri@talan.com.tn,+216 55 806 821,Chef de Projet,DEP009,2020-08-08,115932.38,EMP0001,Contractor,Tunisie,Ariana,55.74,40
+EMP0107,Olfa,Tlili,olfa.tlili@talan.com.tn,+216 20 279 481,Data Engineer,DEP003,2019-05-08,67975.5,EMP0009,Fixed-Term,Tunisie,Tunis,32.68,35
+EMP0108,Wassim,Trabelsi,wassim.trabelsi@talan.com.tn,+216 55 474 703,Directeur General Adjoint,DEP007,2019-02-03,37200.65,EMP0004,Permanent,Tunisie,Manouba,17.88,40
+EMP0109,Aziz,Tlili,aziz.tlili@talan.com.tn,+216 53 790 376,Architecte Solution,DEP001,2023-07-17,87289.41,EMP0008,Permanent,Tunisie,Sfax,41.97,40
+EMP0110,Asma,Brahim,asma.brahim@talan.com.tn,+216 53 861 371,Chef de Projet,DEP009,2017-08-25,90327.14,EMP0009,Fixed-Term,Tunisie,Tunis,43.43,45
+EMP0111,Houssem,Gharbi,houssem.gharbi@talan.com.tn,+216 90 271 717,Directeur de Pole,DEP005,2018-05-21,38617.68,EMP0004,Contractor,Tunisie,Tunis,18.57,40
+EMP0112,Wael,Zouari,wael.zouari@talan.com.tn,+216 27 781 416,Business Analyst,DEP003,2019-04-29,114771.45,EMP0008,Contractor,Tunisie,Ariana,55.18,37
+EMP0113,Afef,Hammami,afef.hammami@talan.com.tn,+216 22 189 784,VP,DEP004,2022-07-30,125144.14,EMP0004,Fixed-Term,Tunisie,Nabeul,60.17,40
+EMP0114,Khaled,Bouaziz,khaled.bouaziz@talan.com.tn,+216 98 173 907,Ingenieur Logiciel,DEP006,2020-02-26,95738.3,EMP0004,Contractor,Tunisie,Ariana,46.03,37
+EMP0115,Mariem,Ben Romdhane,mariem.ben-romdhane@talan.com.tn,+216 22 797 307,Data Scientist,DEP009,2022-08-15,87341.04,EMP0016,Permanent,Tunisie,Bizerte,41.99,45
+EMP0116,Hamza,Bchir,hamza.bchir@talan.com.tn,+216 23 452 498,Responsable Compte,DEP006,2015-02-10,45431.16,EMP0012,Permanent,Tunisie,Tunis,21.84,40
+EMP0117,Houssem,Ben Ali,houssem.ben-ali@talan.com.tn,+216 53 326 978,Ingenieur Logiciel,DEP008,2023-07-31,122901.81,EMP0006,Fixed-Term,Tunisie,Sfax,59.09,37
+EMP0118,Ameni,Cherni,ameni.cherni@talan.com.tn,+216 27 155 957,Senior Manager,DEP002,2018-10-05,118787.28,EMP0019,Fixed-Term,Tunisie,Nabeul,57.11,40
+EMP0119,Nacer,Sassi,nacer.sassi@talan.com.tn,+216 24 666 357,VP,DEP005,2017-12-19,34202.1,EMP0013,Fixed-Term,Tunisie,Manouba,16.44,40
+EMP0120,Lotfi,Chabbi,lotfi.chabbi@talan.com.tn,+216 90 271 962,Senior Manager,DEP005,2016-12-25,34406.47,EMP0013,Permanent,Tunisie,Ben Arous,16.54,37
+EMP0121,Leila,Bettaieb,leila.bettaieb@talan.com.tn,+216 20 990 449,Ingenieur Senior,DEP003,2018-11-28,129281.42,EMP0004,Contractor,Tunisie,Tunis,62.15,40
+EMP0122,Sarra,Rekik,sarra.rekik@talan.com.tn,+216 53 295 486,Lead Consultant,DEP003,2019-03-27,58931.53,EMP0002,Contractor,Tunisie,Manouba,28.33,40
+EMP0123,Sofiene,Mabrouk,sofiene.mabrouk@talan.com.tn,+216 50 609 852,Directeur de Pole,DEP009,2015-01-09,83494.93,EMP0015,Permanent,Tunisie,Sfax,40.14,40
+EMP0124,Houssem,Bettaieb,houssem.bettaieb@talan.com.tn,+216 25 273 999,Ingenieur DevOps,DEP006,2022-10-01,134120.58,EMP0012,Contractor,Tunisie,Tunis,64.48,40
+EMP0125,Mounir,Romdhane,mounir.romdhane@talan.com.tn,+216 20 772 163,Senior Manager,DEP001,2020-07-10,116684.8,EMP0014,Contractor,Tunisie,Tunis,56.1,32
+EMP0126,Fatma,Chabbi,fatma.chabbi@talan.com.tn,+216 24 133 412,Chef de Projet,DEP007,2016-08-10,128981.29,EMP0013,Fixed-Term,Tunisie,Tunis,62.01,37
+EMP0127,Maroua,Elloumi,maroua.elloumi@talan.com.tn,+216 55 580 248,Chef de Projet,DEP001,2017-01-10,112412.5,EMP0014,Permanent,Tunisie,Tunis,54.04,32
+EMP0128,Emna,Romdhane,emna.romdhane@talan.com.tn,+216 21 240 394,Consultant,DEP010,2015-02-24,143331.11,EMP0008,Contractor,Tunisie,Sfax,68.91,45
+EMP0129,Wael,Guizani,wael.guizani@talan.com.tn,+216 55 692 365,Data Scientist,DEP009,2015-09-30,96556.02,EMP0008,Permanent,Tunisie,Bizerte,46.42,40
+EMP0130,Asma,Fehri,asma.fehri@talan.com.tn,+216 27 422 344,Senior Consultant,DEP003,2021-08-05,77293.69,EMP0015,Permanent,Tunisie,Ariana,37.16,40
+EMP0131,Emna,Cherni,emna.cherni@talan.com.tn,+216 21 354 359,Architecte Solution,DEP010,2017-08-09,126984.97,EMP0016,Contractor,Tunisie,Sfax,61.05,37
+EMP0132,Ghassen,Kchaou,ghassen.kchaou@talan.com.tn,+216 92 215 944,Data Scientist,DEP006,2023-01-20,94619.23,EMP0008,Contractor,Tunisie,Manouba,45.49,35
+EMP0133,Asma,Trabelsi,asma.trabelsi@talan.com.tn,+216 22 926 673,Ingenieur Logiciel,DEP005,2018-08-14,51496.7,EMP0011,Contractor,Tunisie,Nabeul,24.76,40
+EMP0134,Ines,Haddad,ines.haddad@talan.com.tn,+216 25 101 752,Business Analyst,DEP003,2016-11-29,61237.14,EMP0018,Contractor,Tunisie,Tunis,29.44,45
+EMP0135,Oussama,Kchaou,oussama.kchaou@talan.com.tn,+216 26 424 601,VP,DEP002,2015-02-08,106026.54,EMP0017,Contractor,Tunisie,Nabeul,50.97,35
+EMP0136,Mounir,Khelifi,mounir.khelifi@talan.com.tn,+216 90 468 243,Data Scientist,DEP007,2017-09-23,24632.1,EMP0018,Contractor,Tunisie,Nabeul,11.84,40
+EMP0137,Slim,Ben Slama,slim.ben-slama@talan.com.tn,+216 27 319 538,Chef de Projet,DEP009,2020-08-07,138081.91,EMP0015,Fixed-Term,Tunisie,Sfax,66.39,35
+EMP0138,Asma,Ben Youssef,asma.ben-youssef@talan.com.tn,+216 99 564 387,VP,DEP002,2016-06-13,118319.9,EMP0005,Permanent,Tunisie,Tunis,56.88,40
+EMP0139,Chaima,Elloumi,chaima.elloumi@talan.com.tn,+216 92 984 999,Ingenieur Senior,DEP007,2017-11-12,112982.25,EMP0003,Contractor,Tunisie,Manouba,54.32,40
+EMP0140,Hamza,Mahfoudhi,hamza.mahfoudhi@talan.com.tn,+216 26 557 332,Directeur General Adjoint,DEP005,2021-11-27,108046.52,EMP0011,Permanent,Tunisie,Nabeul,51.95,35
+EMP0141,Mehdi,Mellouli,mehdi.mellouli@talan.com.tn,+216 52 631 138,Ingenieur DevOps,DEP010,2017-01-10,131338.28,EMP0016,Contractor,Tunisie,Sfax,63.14,40
+EMP0142,Asma,Abidi,asma.abidi@talan.com.tn,+216 26 995 448,Developpeur Full-Stack,DEP010,2018-08-04,47149.73,EMP0013,Contractor,Tunisie,Sfax,22.67,40
+EMP0143,Bilel,Mansouri,bilel.mansouri@talan.com.tn,+216 95 903 854,Directeur de Pole,DEP009,2015-04-11,49605.99,EMP0018,Permanent,Tunisie,Tunis,23.85,37
+EMP0144,Maroua,Tlili,maroua.tlili@talan.com.tn,+216 26 202 666,Lead Consultant,DEP004,2022-06-24,79996.98,EMP0014,Contractor,Tunisie,Tunis,38.46,40
+EMP0145,Maroua,Amri,maroua.amri@talan.com.tn,+216 21 278 132,Ingenieur Logiciel,DEP006,2016-06-30,27033.65,EMP0020,Fixed-Term,Tunisie,Manouba,13,40
+EMP0146,Afef,Kchaou,afef.kchaou@talan.com.tn,+216 26 378 982,Business Analyst,DEP010,2020-04-23,48336.69,EMP0004,Contractor,Tunisie,Tunis,23.24,37
+EMP0147,Lotfi,Bouzid,lotfi.bouzid@talan.com.tn,+216 92 115 172,Senior Consultant,DEP007,2016-03-31,121836.75,EMP0012,Fixed-Term,Tunisie,Nabeul,58.58,40
+EMP0148,Nizar,Bouzid,nizar.bouzid@talan.com.tn,+216 22 273 116,VP,DEP006,2015-03-17,78179.18,EMP0010,Permanent,Tunisie,Sousse,37.59,40
+EMP0149,Lotfi,Guizani,lotfi.guizani@talan.com.tn,+216 27 189 226,Analyste Fonctionnel,DEP009,2021-08-20,52854.23,EMP0019,Permanent,Tunisie,Tunis,25.41,37
+EMP0150,Slim,Ben Salem,slim.ben-salem@talan.com.tn,+216 22 170 180,Analyste Fonctionnel,DEP004,2022-04-06,125840.11,EMP0007,Contractor,Tunisie,Manouba,60.5,37
