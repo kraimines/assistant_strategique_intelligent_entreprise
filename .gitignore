@@ -61,6 +61,8 @@ backend/chroma_db/
 # ============================
 # Sensitive business data
 # ============================
+data/*.csv
+data/**/*.csv
 data/raw/*.xlsx
 data/raw/*.xls
 data/raw/*.xlsm
