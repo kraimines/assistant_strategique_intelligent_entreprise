@@ -63,6 +63,12 @@ backend/chroma_db/
 # ============================
 data/*.csv
 data/**/*.csv
+data/*.xlsx
+data/*.xls
+data/*.xlsm
+data/**/*.xlsx
+data/**/*.xls
+data/**/*.xlsm
 data/raw/*.xlsx
 data/raw/*.xls
 data/raw/*.xlsm
