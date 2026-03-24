@@ -1,73 +1,96 @@
-name: assistant-strategique-intelligent-entreprise
+version: "3.9"
+
+name: talan-intelligent-platform
+
+# ── Réseau personnalisé ──────────────────────────────────────────────────────
+networks:
+  talan-network:
+    driver: bridge
+
+# ── Volumes persistants ──────────────────────────────────────────────────────
+volumes:
+  pgdata:
+  neo4j_data:
+  neo4j_logs:
+  redis_data:
 
 services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
-    image: postgres:15
-    container_name: asi_postgres
+    image: postgres:16-alpine
+    container_name: talan_postgres
     restart: unless-stopped
     env_file:
-      - ../.env
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB_HR}
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - talan-network
 
+  # ── Neo4j ─────────────────────────────────────────────────────────────────
   neo4j:
     image: neo4j:5
-    container_name: asi_neo4j
+    container_name: talan_neo4j
     restart: unless-stopped
-    env_file:
-      - ../.env
     environment:
       NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc"]'
     ports:
       - "7474:7474"
       - "7687:7687"
     volumes:
       - neo4j_data:/data
+      - neo4j_logs:/logs
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "cypher-shell -a bolt://localhost:7687 -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1;' || exit 1"
-        ]
-      interval: 15s
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 20s
       timeout: 10s
-      retries: 8
-      start_period: 20s
+      retries: 3
+      start_period: 40s
+    networks:
+      - talan-network
 
+  # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
-    image: redis:7-alpine
-    container_name: asi_redis
+    image: redis:7.2-alpine
+    container_name: talan_redis
     restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "PING"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - talan-network
 
+  # ── API FastAPI ───────────────────────────────────────────────────────────
   api:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: asi_api
+    container_name: talan_api
     restart: unless-stopped
     env_file:
-      - ../.env
+      - .env
     environment:
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
@@ -75,47 +98,51 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "8000:8000"
+    volumes:
+      - ../backend:/app          # hot reload backend
+      - ../data:/app/data:ro     # accès aux datasets
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
       neo4j:
-        condition: service_healthy
+        condition: service_started
       redis:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/docs > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health ||exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    networks:
+      - talan-network
 
+  # ── Frontend ──────────────────────────────────────────────────────────────
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-    container_name: asi_frontend
+    container_name: talan_frontend
     restart: unless-stopped
     env_file:
-      - ../.env
+      - .env
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://api:8000}
     ports:
       - "5173:5173"
+    volumes:
+      - ../frontend:/app   # hot reload frontend
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"require('http').get('http://localhost:5173', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
+          "wget -q -O- http://localhost:5173 | grep -q 'html' || exit 1"
         ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
-volumes:
-  postgres_data:
-  neo4j_data:
-  redis_data:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    networks:
+      - talan-network
