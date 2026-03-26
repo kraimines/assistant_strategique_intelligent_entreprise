@@ -1,1 +1,1 @@
-"""API Routes Package"""
+"""REST API layer."""

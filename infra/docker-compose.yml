@@ -33,22 +33,26 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./backend/db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 20s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_HR}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - talan-network
 
   # ── Neo4j ─────────────────────────────────────────────────────────────────
   neo4j:
-    image: neo4j:5
+    image: neo4j:5.18-community
     container_name: talan_neo4j
     restart: unless-stopped
     environment:
       NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+      NEO4J_server_memory_pagecache__size: 512m
       NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_server_config_strict_validation_enabled: false
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -56,11 +60,11 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
-      interval: 20s
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 15s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 30s
     networks:
       - talan-network
 
@@ -85,7 +89,7 @@ services:
   # ── API FastAPI ───────────────────────────────────────────────────────────
   api:
     build:
-      context: ../backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: talan_api
     restart: unless-stopped
@@ -99,28 +103,40 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ../backend:/app          # hot reload backend
-      - ../data:/app/data:ro     # accès aux datasets
+      - ./backend:/app          # hot reload backend
+      - ./data:/app/data:ro     # accès aux datasets
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health ||exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 45s
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - talan-network
+
+  # ── Adminer ───────────────────────────────────────────────────────────────
+  adminer:
+    image: adminer:4.8.1
+    container_name: talan_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
     networks:
       - talan-network
 
   # ── Frontend ──────────────────────────────────────────────────────────────
   frontend:
     build:
-      context: ../frontend
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: talan_frontend
     restart: unless-stopped
@@ -131,18 +147,19 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ../frontend:/app   # hot reload frontend
+      - ./frontend:/app   # hot reload frontend
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O- http://localhost:5173 | grep -q 'html' || exit 1"
+          "node -e \"require('http').get('http://localhost:5173', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
         ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 45s
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     networks:
       - talan-network

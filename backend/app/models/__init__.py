@@ -1,1 +1,1 @@
-"""Data Models Package"""
+"""SQLAlchemy ORM models."""

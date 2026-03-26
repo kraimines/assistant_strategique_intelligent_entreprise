@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Tests
+tests/
+
+# Données sources (montées via volume en dev)
+data/
+
+# Environnement local
+.env
+.env.*
+
+# Vector store local
+chroma_db/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore

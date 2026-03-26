@@ -1,1 +1,1 @@
-"""Core Configuration Package"""
+"""Core configuration, database, and security."""

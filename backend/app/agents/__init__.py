@@ -1,1 +1,1 @@
-"""AI Agents Package"""
+"""LangGraph multi-agent orchestration."""

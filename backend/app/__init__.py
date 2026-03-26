@@ -1,1 +1,1 @@
-"""Talan Platform API - Application Package"""
+"""Talan Platform — Backend application package."""

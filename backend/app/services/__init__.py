@@ -1,1 +1,1 @@
-"""Business Logic Services Package"""
+"""Business logic services."""
