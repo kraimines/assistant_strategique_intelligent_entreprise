@@ -4,9 +4,10 @@ sqlalchemy==2.0.36
 pydantic==2.10.3
 pydantic-settings==2.7.0
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-multipart==0.0.20
 psycopg2-binary==2.9.10
+asyncpg==0.30.0
 langchain==0.3.9
 langgraph==0.2.56
 langchain-google-genai==2.0.5
@@ -17,7 +18,15 @@ openpyxl==3.1.5
 py2neo==2021.2.4
 redis==5.2.0
 numpy==1.26.4
+# ── Testing ───────────────────────────────────────────────────────────────────
 pytest==8.3.4
+pytest-asyncio==0.24.0
+anyio[trio]==4.6.2
 httpx==0.28.1
+# ── Neo4j official async driver ───────────────────────────────────────────────
+neo4j==5.26.0
+# ── Scheduler ─────────────────────────────────────────────────────────────────
+apscheduler==3.10.4
+# ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv==1.0.1
 email-validator==2.3.0

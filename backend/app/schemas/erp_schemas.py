@@ -1,5 +1,6 @@
 """Pydantic schemas — domaine ERP."""
-from datetime import date, datetime
+from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel
@@ -8,25 +9,30 @@ from pydantic import BaseModel
 # ── Supplier ──────────────────────────────────────────────────────────────────
 
 class SupplierRead(BaseModel):
-    supplier_id:   int
+    supplier_id:   str
     name:          str
-    category:      Optional[str]   = None
-    country:       Optional[str]   = None
-    rating:        Optional[float] = None
-    payment_terms: Optional[str]   = None
+    country:       Optional[str]     = None
+    category:      Optional[str]     = None
+    contact_email: Optional[str]     = None
+    phone:         Optional[str]     = None
+    rating:        Optional[Decimal] = None
+    payment_terms: Optional[str]     = None
+    created_at:    Optional[date]    = None
     model_config = {"from_attributes": True}
 
 
 # ── Customer ──────────────────────────────────────────────────────────────────
 
 class CustomerRead(BaseModel):
-    customer_id:  int
-    account_id:   Optional[int]   = None
-    name:         str
-    industry:     Optional[str]   = None
-    country:      Optional[str]   = None
-    credit_limit: Optional[float] = None
-    created_at:   datetime
+    customer_id:   str
+    account_id:    Optional[str]     = None
+    name:          str
+    country:       Optional[str]     = None
+    industry:      Optional[str]     = None
+    credit_limit:  Optional[Decimal] = None
+    payment_terms: Optional[str]     = None
+    tax_id:        Optional[str]     = None
+    created_at:    Optional[date]    = None
     model_config = {"from_attributes": True}
 
 
@@ -38,25 +44,57 @@ class CustomerList(BaseModel):
 # ── Product ───────────────────────────────────────────────────────────────────
 
 class ProductRead(BaseModel):
-    product_id:  int
-    name:        str
-    category:    Optional[str]   = None
-    unit_price:  Optional[float] = None
-    supplier_id: Optional[int]   = None
-    stock_qty:   Optional[int]   = None
-    unit:        Optional[str]   = None
+    product_id:      str
+    name:            Optional[str]     = None
+    category:        Optional[str]     = None
+    unit_price:      Optional[Decimal] = None
+    currency:        Optional[str]     = None
+    sku:             Optional[str]     = None
+    supplier_id:     Optional[str]     = None
+    unit_of_measure: Optional[str]     = None
+    created_at:      Optional[date]    = None
     model_config = {"from_attributes": True}
+
+
+class ProductList(BaseModel):
+    total: int
+    items: list[ProductRead]
 
 
 # ── Sales Order ───────────────────────────────────────────────────────────────
 
+class SalesOrderCreate(BaseModel):
+    customer_id:     Optional[str]     = None
+    order_date:      Optional[date]    = None
+    delivery_date:   Optional[date]    = None
+    amount:          Optional[Decimal] = None
+    status:          Optional[str]     = None
+    sales_rep_id:    Optional[str]     = None
+    currency:        Optional[str]     = None
+    notes:           Optional[str]     = None
+    delivery_status: Optional[str]     = None
+
+
+class SalesOrderUpdate(BaseModel):
+    status:          Optional[str]     = None
+    delivery_date:   Optional[date]    = None
+    amount:          Optional[Decimal] = None
+    currency:        Optional[str]     = None
+    notes:           Optional[str]     = None
+    delivery_status: Optional[str]     = None
+
+
 class SalesOrderRead(BaseModel):
-    order_id:     int
-    customer_id:  Optional[int]   = None
-    order_date:   Optional[date]  = None
-    status:       Optional[str]   = None
-    total_amount: Optional[float] = None
-    currency:     Optional[str]   = None
+    order_id:        str
+    customer_id:     Optional[str]     = None
+    order_date:      Optional[date]    = None
+    delivery_date:   Optional[date]    = None
+    amount:          Optional[Decimal] = None
+    status:          Optional[str]     = None
+    sales_rep_id:    Optional[str]     = None
+    currency:        Optional[str]     = None
+    notes:           Optional[str]     = None
+    delivery_status: Optional[str]     = None
     model_config = {"from_attributes": True}
 
 
@@ -67,16 +105,35 @@ class SalesOrderList(BaseModel):
 
 # ── Invoice ───────────────────────────────────────────────────────────────────
 
+class InvoiceCreate(BaseModel):
+    customer_id:    Optional[str]     = None
+    order_id:       Optional[str]     = None
+    amount:         Optional[Decimal] = None
+    tax_amount:     Optional[Decimal] = None
+    issue_date:     Optional[date]    = None
+    due_date:       Optional[date]    = None
+    payment_status: Optional[str]     = None
+    currency:       Optional[str]     = None
+
+
+class InvoiceUpdate(BaseModel):
+    due_date:       Optional[date]    = None
+    amount:         Optional[Decimal] = None
+    tax_amount:     Optional[Decimal] = None
+    payment_status: Optional[str]     = None
+    currency:       Optional[str]     = None
+
+
 class InvoiceRead(BaseModel):
-    invoice_id:     int
-    customer_id:    Optional[int]   = None
-    order_id:       Optional[int]   = None
-    invoice_date:   Optional[date]  = None
-    due_date:       Optional[date]  = None
-    amount:         Optional[float] = None
-    payment_status: Optional[str]   = None
-    currency:       Optional[str]   = None
-    created_at:     datetime
+    invoice_id:     str
+    customer_id:    Optional[str]     = None
+    order_id:       Optional[str]     = None
+    amount:         Optional[Decimal] = None
+    tax_amount:     Optional[Decimal] = None
+    issue_date:     Optional[date]    = None
+    due_date:       Optional[date]    = None
+    payment_status: Optional[str]     = None
+    currency:       Optional[str]     = None
     model_config = {"from_attributes": True}
 
 
@@ -87,11 +144,22 @@ class InvoiceList(BaseModel):
 
 # ── Payment ───────────────────────────────────────────────────────────────────
 
+class PaymentCreate(BaseModel):
+    payment_date:   Optional[date]    = None
+    amount:         Optional[Decimal] = None
+    payment_method: Optional[str]     = None
+    reference:      Optional[str]     = None
+    currency:       Optional[str]     = None
+    bank_account:   Optional[str]     = None
+
+
 class PaymentRead(BaseModel):
-    payment_id:     int
-    invoice_id:     Optional[int]   = None
-    payment_date:   Optional[date]  = None
-    amount_paid:    Optional[float] = None
-    payment_method: Optional[str]   = None
-    reference:      Optional[str]   = None
+    payment_id:     str
+    invoice_id:     Optional[str]     = None
+    payment_date:   Optional[date]    = None
+    amount:         Optional[Decimal] = None
+    payment_method: Optional[str]     = None
+    reference:      Optional[str]     = None
+    currency:       Optional[str]     = None
+    bank_account:   Optional[str]     = None
     model_config = {"from_attributes": True}

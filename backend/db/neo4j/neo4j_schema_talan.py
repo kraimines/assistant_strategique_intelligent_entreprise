@@ -292,6 +292,102 @@ NODE_SCHEMA = {
         },
         "unique_key": "order_id",
     },
+
+    # ── CRM EXTENDED ─────────────────────────────────────────────────────────
+
+    "Contact": {
+        "source_table": "crm_contacts",
+        "properties": {
+            "contact_id":  "STRING",   # PK
+            "first_name":  "STRING",
+            "last_name":   "STRING",
+            "email":       "STRING",
+            "phone":       "STRING",
+            "job_title":   "STRING",
+            "country":     "STRING",
+            "account_id":  "STRING",   # FK → Account
+            "created_at":  "DATETIME",
+        },
+        "unique_key": "contact_id",
+        "fulltext_index": ["first_name", "last_name", "email"],
+    },
+
+    "Activity": {
+        "source_table": "crm_activities",
+        "properties": {
+            "activity_id":      "STRING",   # PK
+            "type":             "STRING",   # Call / Email / Meeting / Demo
+            "date":             "DATETIME",
+            "duration_minutes": "INTEGER",
+            "notes":            "STRING",
+            "contact_id":       "STRING",   # FK → Contact
+            "opportunity_id":   "STRING",   # FK → Opportunity
+            "created_by":       "STRING",   # FK → Employee
+        },
+        "unique_key": "activity_id",
+    },
+
+    "RevenueHistory": {
+        "source_table": "crm_revenue_history",
+        "properties": {
+            "revenue_id":        "STRING",   # PK
+            "account_id":        "STRING",   # FK → Account
+            "year_month":        "STRING",   # ex: 2024-03
+            "revenue":           "FLOAT",
+            "recurring_revenue": "FLOAT",
+            "new_revenue":       "FLOAT",
+            "currency":          "STRING",
+            "source":            "STRING",
+        },
+        "unique_key": "revenue_id",
+    },
+
+    # ── ERP EXTENDED ─────────────────────────────────────────────────────────
+
+    "Payment": {
+        "source_table": "erp_payments",
+        "properties": {
+            "payment_id":     "STRING",   # PK
+            "invoice_id":     "STRING",   # FK → Invoice
+            "payment_date":   "DATE",
+            "amount":         "FLOAT",
+            "payment_method": "STRING",   # Bank Transfer / Check / Cash
+            "reference":      "STRING",
+            "currency":       "STRING",
+            "bank_account":   "STRING",
+        },
+        "unique_key": "payment_id",
+    },
+
+    "PurchaseOrder": {
+        "source_table": "erp_purchase_orders",
+        "properties": {
+            "po_id":             "STRING",   # PK
+            "supplier_id":       "STRING",   # FK → Supplier
+            "order_date":        "DATE",
+            "expected_delivery": "DATE",
+            "amount":            "FLOAT",
+            "status":            "STRING",   # Draft / Confirmed / Received
+            "approved_by":       "STRING",   # FK → Employee
+            "currency":          "STRING",
+            "warehouse":         "STRING",
+        },
+        "unique_key": "po_id",
+    },
+
+    "Inventory": {
+        "source_table": "erp_inventory",
+        "properties": {
+            "inventory_id":       "STRING",   # PK
+            "product_id":         "STRING",   # FK → Product
+            "warehouse_location": "STRING",
+            "stock_quantity":     "INTEGER",
+            "reorder_level":      "INTEGER",
+            "unit_cost":          "FLOAT",
+            "last_updated":       "DATETIME",
+        },
+        "unique_key": "inventory_id",
+    },
 }
 
 
@@ -478,6 +574,215 @@ RELATIONSHIP_SCHEMA = [
         "props": {},
         "description": "Commercial responsable de la commande",
     },
+
+    # ── HR — relations manquantes ────────────────────────────────────────────
+    {
+        "type": "HEADED_BY",
+        "from": "Department", "to": "Employee",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Manager responsable du département (hr_departments.manager_id)",
+    },
+    {
+        "type": "SUBMITTED_LEAVE",
+        "from": "Employee", "to": "LeaveRequest",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Demande de congé soumise par l'employé",
+    },
+    {
+        "type": "APPROVED_LEAVE",
+        "from": "Employee", "to": "LeaveRequest",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Congé approuvé par le manager (hr_leave_requests.approved_by)",
+    },
+    {
+        "type": "HAD_REVIEW",
+        "from": "Employee", "to": "PerformanceReview",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Évaluation de performance reçue par l'employé",
+    },
+    {
+        "type": "REVIEWED_BY",
+        "from": "PerformanceReview", "to": "Employee",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Évaluateur de la revue (hr_performance_reviews.reviewer_id)",
+    },
+    {
+        "type": "OPENS_POSITION",
+        "from": "Department", "to": "JobOpening",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Poste ouvert par le département (hr_recruitment_pipeline.department_id)",
+    },
+    {
+        "type": "RECRUITS_FOR",
+        "from": "Employee", "to": "JobOpening",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Recruteur responsable du poste (hr_recruitment_pipeline.recruiter_id)",
+    },
+    {
+        "type": "MANAGES_PROJECT",
+        "from": "Employee", "to": "Project",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Chef de projet (hr_projects.project_manager_id)",
+    },
+    {
+        "type": "BELONGS_TO_DEPT",
+        "from": "Project", "to": "Department",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Département porteur du projet (hr_projects.department_id)",
+    },
+    {
+        "type": "HAS_MILESTONE",
+        "from": "Project", "to": "Milestone",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Jalons du projet (hr_project_milestones.project_id)",
+    },
+    {
+        "type": "OWNS_MILESTONE",
+        "from": "Employee", "to": "Milestone",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Responsable d'un jalon (hr_project_milestones.owner_id)",
+    },
+    {
+        "type": "LOGGED_TIME",
+        "from": "Employee", "to": "Project",
+        "cardinality": "MANY_TO_MANY",
+        "props": {
+            "timesheet_id":    "STRING",
+            "actual_hours":    "FLOAT",
+            "planned_hours":   "FLOAT",
+            "overtime_hours":  "FLOAT",
+            "billable":        "BOOLEAN",
+            "week_start_date": "DATE",
+        },
+        "description": "Feuille de temps employé ↔ projet (hr_timesheets)",
+    },
+
+    # ── CRM — relations manquantes ───────────────────────────────────────────
+    {
+        "type": "HAS_CONTACT",
+        "from": "Account", "to": "Contact",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Contacts rattachés à un compte (crm_contacts.account_id)",
+    },
+    {
+        "type": "HAS_OPPORTUNITY",
+        "from": "Account", "to": "Opportunity",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Opportunités d'un compte (crm_opportunities.account_id)",
+    },
+    {
+        "type": "OWNS_OPPORTUNITY",
+        "from": "Employee", "to": "Opportunity",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Commercial owner de l'opportunité (crm_opportunities.owner_id)",
+    },
+    {
+        "type": "HAS_REVENUE",
+        "from": "Account", "to": "RevenueHistory",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Historique CA mensuel d'un compte (crm_revenue_history.account_id)",
+    },
+    {
+        "type": "LOGGED_ACTIVITY",
+        "from": "Employee", "to": "Activity",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Activité CRM créée par un commercial (crm_activities.created_by)",
+    },
+    {
+        "type": "ACTIVITY_ON_CONTACT",
+        "from": "Activity", "to": "Contact",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Activité réalisée auprès d'un contact (crm_activities.contact_id)",
+    },
+    {
+        "type": "ACTIVITY_FOR_OPP",
+        "from": "Activity", "to": "Opportunity",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Activité liée à une opportunité (crm_activities.opportunity_id)",
+    },
+
+    # ── ERP — relations manquantes ───────────────────────────────────────────
+    {
+        "type": "INVOICES_ORDER",
+        "from": "Invoice", "to": "SalesOrder",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Facture rattachée à une commande (erp_invoices.order_id)",
+    },
+    {
+        "type": "SETTLES",
+        "from": "Payment", "to": "Invoice",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Paiement qui règle une facture (erp_payments.invoice_id)",
+    },
+    {
+        "type": "CONTAINS_PRODUCT",
+        "from": "SalesOrder", "to": "Product",
+        "cardinality": "MANY_TO_MANY",
+        "props": {
+            "order_line_id": "STRING",
+            "quantity":      "INTEGER",
+            "unit_price":    "FLOAT",
+            "discount_pct":  "FLOAT",
+            "line_total":    "FLOAT",
+            "currency":      "STRING",
+        },
+        "description": "Lignes de commande vente (erp_order_lines)",
+    },
+    {
+        "type": "ORDERED_FROM",
+        "from": "PurchaseOrder", "to": "Supplier",
+        "cardinality": "MANY_TO_ONE",
+        "props": {},
+        "description": "Commande achat passée à un fournisseur (erp_purchase_orders.supplier_id)",
+    },
+    {
+        "type": "APPROVED_PO",
+        "from": "Employee", "to": "PurchaseOrder",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Employé qui a approuvé la commande achat (erp_purchase_orders.approved_by)",
+    },
+    {
+        "type": "REQUESTS_PRODUCT",
+        "from": "PurchaseOrder", "to": "Product",
+        "cardinality": "MANY_TO_MANY",
+        "props": {
+            "po_line_id":         "STRING",
+            "quantity_ordered":   "INTEGER",
+            "quantity_received":  "INTEGER",
+            "unit_cost":          "FLOAT",
+            "line_total":         "FLOAT",
+            "currency":           "STRING",
+        },
+        "description": "Lignes de commande achat (erp_po_lines)",
+    },
+    {
+        "type": "HAS_STOCK",
+        "from": "Product", "to": "Inventory",
+        "cardinality": "ONE_TO_MANY",
+        "props": {},
+        "description": "Stock en entrepôt pour un produit (erp_inventory.product_id)",
+    },
 ]
 
 
@@ -534,6 +839,26 @@ CREATE CONSTRAINT c_product_id        IF NOT EXISTS
 
 CREATE CONSTRAINT c_order_id          IF NOT EXISTS
   FOR (o:SalesOrder)        REQUIRE o.order_id          IS UNIQUE;
+
+// ── CRM EXTENDED ─────────────────────────────────────────────────────────────
+CREATE CONSTRAINT c_contact_id        IF NOT EXISTS
+  FOR (c:Contact)           REQUIRE c.contact_id        IS UNIQUE;
+
+CREATE CONSTRAINT c_activity_id       IF NOT EXISTS
+  FOR (a:Activity)          REQUIRE a.activity_id       IS UNIQUE;
+
+CREATE CONSTRAINT c_revenue_id        IF NOT EXISTS
+  FOR (r:RevenueHistory)    REQUIRE r.revenue_id        IS UNIQUE;
+
+// ── ERP EXTENDED ─────────────────────────────────────────────────────────────
+CREATE CONSTRAINT c_payment_id        IF NOT EXISTS
+  FOR (p:Payment)           REQUIRE p.payment_id        IS UNIQUE;
+
+CREATE CONSTRAINT c_po_id             IF NOT EXISTS
+  FOR (p:PurchaseOrder)     REQUIRE p.po_id             IS UNIQUE;
+
+CREATE CONSTRAINT c_inventory_id      IF NOT EXISTS
+  FOR (i:Inventory)         REQUIRE i.inventory_id      IS UNIQUE;
 """
 
 
@@ -570,6 +895,17 @@ CREATE INDEX idx_leave_status     IF NOT EXISTS FOR (l:LeaveRequest)  ON (l.stat
 CREATE INDEX idx_opp_stage        IF NOT EXISTS FOR (o:Opportunity)   ON (o.stage);
 CREATE INDEX idx_invoice_status   IF NOT EXISTS FOR (i:Invoice)       ON (i.payment_status);
 CREATE INDEX idx_order_status     IF NOT EXISTS FOR (o:SalesOrder)    ON (o.status);
+
+// ── Index nouveaux nœuds ──────────────────────────────────────────────────────
+CREATE FULLTEXT INDEX ft_contact    IF NOT EXISTS FOR (c:Contact)      ON EACH [c.first_name, c.last_name, c.email];
+CREATE FULLTEXT INDEX ft_supplier   IF NOT EXISTS FOR (s:Supplier)     ON EACH [s.name, s.category];
+
+CREATE INDEX idx_contact_account    IF NOT EXISTS FOR (c:Contact)       ON (c.account_id);
+CREATE INDEX idx_activity_type      IF NOT EXISTS FOR (a:Activity)      ON (a.type);
+CREATE INDEX idx_payment_method     IF NOT EXISTS FOR (p:Payment)       ON (p.payment_method);
+CREATE INDEX idx_po_status          IF NOT EXISTS FOR (p:PurchaseOrder) ON (p.status);
+CREATE INDEX idx_inventory_product  IF NOT EXISTS FOR (i:Inventory)     ON (i.product_id);
+CREATE INDEX idx_revenue_month      IF NOT EXISTS FOR (r:RevenueHistory) ON (r.year_month);
 """
 
 
@@ -644,23 +980,28 @@ VALIDATION_QUERIES = {
 # ===========================================================================
 
 SCHEMA_SUMMARY = {
-    "node_labels":          15,
-    "relationship_types":   24,
-    "unique_constraints":   15,
-    "fulltext_indexes":      6,
-    "property_indexes":      8,
+    "node_labels":          22,   # +7 : Contact, Activity, RevenueHistory, Payment, PurchaseOrder, Inventory
+    "relationship_types":   38,   # +14 nouvelles + tous les existants
+    "unique_constraints":   21,   # +6 nouveaux nœuds
+    "fulltext_indexes":      8,   # +2 : ft_contact, ft_supplier
+    "property_indexes":     14,   # +6 nouveaux
     "domains": {
         "RH":           ["Department", "Employee", "Skill", "LeaveRequest",
                          "PerformanceReview", "JobOpening"],
         "Cross-domain": ["Project", "Milestone"],
-        "CRM":          ["Account", "Opportunity"],
-        "ERP":          ["Customer", "Invoice", "Supplier", "Product", "SalesOrder"],
+        "CRM":          ["Account", "Contact", "Opportunity", "Activity", "RevenueHistory"],
+        "ERP":          ["Customer", "Invoice", "Payment", "Supplier", "Product",
+                         "SalesOrder", "PurchaseOrder", "Inventory"],
     },
     "key_cross_domain_links": [
-        "Project.client_account_id → Account.account_id",
-        "Customer.account_id       → Account.account_id",
-        "SalesOrder.sales_rep_id   → Employee.employee_id",
-        "Opportunity.owner_id      → Employee.employee_id",
+        "Project.client_account_id  → Account.account_id",
+        "Customer.account_id        → Account.account_id",
+        "SalesOrder.sales_rep_id    → Employee.employee_id",
+        "Opportunity.owner_id       → Employee.employee_id",
+        "Activity.created_by        → Employee.employee_id",
+        "PurchaseOrder.approved_by  → Employee.employee_id",
+        "Invoice ─[:INVOICES_ORDER]→ SalesOrder",
+        "Payment ─[:SETTLES]→       Invoice",
     ],
 }
 

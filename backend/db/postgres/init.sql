@@ -4,18 +4,17 @@
 -- ===========================================================================
 
 -- Base CRM
+-- TEMPLATE template0 is required when specifying a non-default locale/encoding
 CREATE DATABASE talan_crm
     WITH OWNER = talan
     ENCODING = 'UTF8'
-    LC_COLLATE = 'en_US.utf8'
-    LC_CTYPE = 'en_US.utf8';
+    TEMPLATE template0;
 
 -- Base ERP
 CREATE DATABASE talan_erp
     WITH OWNER = talan
     ENCODING = 'UTF8'
-    LC_COLLATE = 'en_US.utf8'
-    LC_CTYPE = 'en_US.utf8';
+    TEMPLATE template0;
 
 -- Donner tous les droits à l'utilisateur talan sur toutes les bases
 GRANT ALL PRIVILEGES ON DATABASE talan_hr  TO talan;
