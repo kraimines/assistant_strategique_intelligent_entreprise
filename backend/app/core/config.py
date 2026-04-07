@@ -2,7 +2,7 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000", "http://localhost:5174", "http://127.0.0.1:5173"]
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     postgres_db_erp: str = "talan_erp"
 
     def database_url(self, domain: str) -> str:
-        """Retourne l'URL SQLAlchemy pour le domaine donné (hr | crm | erp)."""
+        """Retourne l'URL SQLAlchemy (psycopg2) pour le domaine donné (hr | crm | erp)."""
         db_map = {
             "hr":  self.postgres_db_hr,
             "crm": self.postgres_db_crm,
@@ -59,6 +59,21 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{db_name}"
         )
 
+    def async_database_url(self, domain: str) -> str:
+        """Retourne l'URL SQLAlchemy (asyncpg) pour le domaine donné (hr | crm | erp)."""
+        db_map = {
+            "hr":  self.postgres_db_hr,
+            "crm": self.postgres_db_crm,
+            "erp": self.postgres_db_erp,
+        }
+        db_name = db_map.get(domain)
+        if not db_name:
+            raise ValueError(f"Unknown domain '{domain}'. Must be one of {list(db_map)}")
+        return (
+            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{db_name}"
+        )
+
     # ── Neo4j ─────────────────────────────────────────────────────────────────
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
@@ -68,7 +83,33 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # ── Google Generative AI ──────────────────────────────────────────────────
-    google_api_key: str = ""
+    # Accepte GOOGLE_API_KEY ou GEMINI_API_KEY indifféremment
+    google_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("google_api_key", "gemini_api_key"),
+    )
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_temperature: float = 0.1
+    gemini_max_tokens: int = 4096
+
+    # ── LangSmith ─────────────────────────────────────────────────────────────
+    # Accepte LANGSMITH_API_KEY ou LANGCHAIN_API_KEY
+    langsmith_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("langsmith_api_key", "langchain_api_key"),
+    )
+    langsmith_project: str = Field(
+        default="talan-enterprise-platform",
+        validation_alias=AliasChoices("langsmith_project", "langchain_project"),
+    )
+    langchain_tracing_v2: bool = True
+
+    # ── Groq (gratuit, 14 400 req/jour) ──────────────────────────────────────
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # ── LLM provider actif : "gemini" | "groq" ───────────────────────────────
+    llm_provider: str = "groq"
 
     # ── ChromaDB ─────────────────────────────────────────────────────────────
     chroma_persist_dir: str = "./chroma_db"

@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import decode_access_token
 
-http_bearer = HTTPBearer(auto_error=True)
+http_bearer = HTTPBearer(auto_error=False)
+
+# ── Dev bypass user ───────────────────────────────────────────────────────────
+_DEV_TOKEN = "dev-token"
 
 
 # ── Async DB sessions per domain ──────────────────────────────────────────────
@@ -38,10 +41,23 @@ async def get_current_user(
 ):
     """
     Decode JWT, load the User from DB, and return it.
-    Raises HTTP 401 if token is invalid or user not found.
+    Accepts 'dev-token' as a bypass for local development.
     """
-    # Import here to avoid circular imports at module load
-    from app.models.user_models import User
+    from app.models.user_models import User, Role
+
+    # ── Dev bypass — no real DB/JWT needed ───────────────────────────────────
+    token_str = credentials.credentials if credentials else None
+    if not token_str or token_str == _DEV_TOKEN:
+        # Return a mock admin user without hitting the DB
+        mock = User(
+            id=1,
+            email="ines@talan.com",
+            hashed_password="",
+            full_name="Ines Kraim",
+            role=Role.admin,
+            is_active=True,
+        )
+        return mock
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -49,7 +65,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token_str)
         user_id: str | None = payload.get("sub")
         if user_id is None:
             raise credentials_exception

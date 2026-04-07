@@ -1,1 +1,230 @@
-"""ERP domain agent."""
+"""ERP domain agent node.
+
+Implements a tool-calling ReAct loop (up to MAX_TOOL_ITERATIONS rounds) that
+uses the five ERP tools to answer the user's question, then stores the final AI
+response and all tool results in AgentState.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from typing import Any, Dict, List
+
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+
+from app.agents.state import AgentState
+from app.core.llm import get_llm_with_tools, invoke_with_retry, truncate_tool_result
+from app.prompts.erp_prompts import ERP_SYSTEM_PROMPT
+from app.tools.erp_tools import (
+    get_invoice_status,
+    get_payment_history,
+    get_purchase_orders,
+    get_supplier_info,
+    list_sales_orders,
+)
+
+logger = logging.getLogger(__name__)
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+MAX_TOOL_ITERATIONS = 3
+
+# ── Tool registry ─────────────────────────────────────────────────────────────
+
+ERP_TOOLS = [
+    get_invoice_status,
+    get_payment_history,
+    list_sales_orders,
+    get_supplier_info,
+    get_purchase_orders,
+]
+
+
+def _build_tools_by_name() -> Dict[str, Any]:
+    """Return a mapping of tool name → tool callable for fast lookup.
+
+    Returns:
+        Dict mapping each tool's .name attribute to the tool object.
+    """
+    return {tool.name: tool for tool in ERP_TOOLS}
+
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+
+def erp_agent_node(state: AgentState) -> AgentState:
+    """ERP domain agent: answers ERP questions via a bounded tool-calling loop.
+
+    Workflow
+    --------
+    1. Build ``llm_with_tools`` by binding all ERP tools to the base LLM.
+    2. Prepend a SystemMessage containing ERP_SYSTEM_PROMPT to the conversation.
+    3. Invoke the LLM; if tool_calls are present in the response, execute each
+       tool and collect ToolMessages.
+    4. Re-invoke the LLM with the tool results appended to the message list.
+    5. Repeat up to MAX_TOOL_ITERATIONS times or until no more tool_calls.
+    6. Store the final AIMessage in state["messages"] and aggregated tool
+       results in state["tool_results"].
+
+    Error handling: any exception at the LLM or tool level is caught, logged,
+    and surfaced via state["error_message"].  The node always returns a valid
+    AgentState dict.
+
+    Args:
+        state: Current shared AgentState.
+
+    Returns:
+        Updated AgentState with new messages and tool_results populated.
+    """
+    t0 = time.perf_counter()
+    user_id = state.get("user_id", "unknown")
+    logger.info("erp_agent_node start — user_id=%s", user_id)
+
+    # ── Initialise accumulators ───────────────────────────────────────────────
+    accumulated_tool_results: Dict[str, Any] = dict(state.get("tool_results") or {})
+    tools_by_name = _build_tools_by_name()
+    new_messages: List[Any] = []  # messages produced by this node only
+
+    # ── Bind tools to LLM ────────────────────────────────────────────────────
+    try:
+        llm_with_tools = get_llm_with_tools(ERP_TOOLS)
+    except Exception as exc:
+        logger.exception("erp_agent_node: failed to bind tools to LLM — %s", exc)
+        return {
+            **state,
+            "error_message": f"Erreur d'initialisation de l'agent ERP : {exc}",
+        }
+
+    # ── Build initial message list ────────────────────────────────────────────
+    system_msg = SystemMessage(content=ERP_SYSTEM_PROMPT)
+    messages: List[Any] = [system_msg] + list(state.get("messages", []))
+
+    # ── Tool-calling ReAct loop ───────────────────────────────────────────────
+    for iteration in range(1, MAX_TOOL_ITERATIONS + 1):
+        logger.debug("erp_agent_node: LLM invoke iteration %d", iteration)
+
+        try:
+            t_llm = time.perf_counter()
+            ai_response: AIMessage = invoke_with_retry(llm_with_tools, messages)
+            llm_ms = (time.perf_counter() - t_llm) * 1000
+            logger.debug(
+                "erp_agent_node: LLM iteration %d completed in %.1f ms", iteration, llm_ms
+            )
+        except Exception as exc:
+            logger.exception(
+                "erp_agent_node: LLM invocation failed at iteration %d — %s",
+                iteration,
+                exc,
+            )
+            error_msg = f"Erreur lors de la génération de la réponse ERP : {exc}"
+            return {
+                **state,
+                "messages": new_messages,
+                "tool_results": accumulated_tool_results or None,
+                "error_message": error_msg,
+            }
+
+        # Append AI response to our working message list
+        messages.append(ai_response)
+
+        # ── Check for tool calls ──────────────────────────────────────────────
+        tool_calls = getattr(ai_response, "tool_calls", None) or []
+
+        if not tool_calls:
+            # No more tool calls — this is the final answer
+            logger.info(
+                "erp_agent_node: no tool calls at iteration %d — treating as final answer",
+                iteration,
+            )
+            new_messages.append(ai_response)
+            break
+
+        # ── Execute each requested tool ───────────────────────────────────────
+        tool_messages: List[ToolMessage] = []
+
+        for tool_call in tool_calls:
+            tool_name: str = tool_call.get("name", "") if isinstance(tool_call, dict) else getattr(tool_call, "name", "")
+            tool_args: Dict[str, Any] = tool_call.get("args", {}) if isinstance(tool_call, dict) else getattr(tool_call, "args", {})
+            tool_call_id: str = tool_call.get("id", "") if isinstance(tool_call, dict) else getattr(tool_call, "id", "")
+
+            logger.info("erp_agent_node: calling tool '%s' args=%s", tool_name, tool_args)
+            t_tool = time.perf_counter()
+
+            if tool_name not in tools_by_name:
+                tool_result: Any = {"error": f"Outil inconnu : '{tool_name}'"}
+                logger.warning("erp_agent_node: unknown tool requested — '%s'", tool_name)
+            else:
+                try:
+                    tool_result = tools_by_name[tool_name].invoke(tool_args)
+                except Exception as exc:
+                    logger.exception(
+                        "erp_agent_node: tool '%s' raised an exception — %s",
+                        tool_name,
+                        exc,
+                    )
+                    tool_result = {"error": str(exc)}
+
+            tool_ms = (time.perf_counter() - t_tool) * 1000
+            logger.info(
+                "erp_agent_node: tool '%s' completed in %.1f ms", tool_name, tool_ms
+            )
+
+            # Serialise result for ToolMessage content (truncate if too large)
+            try:
+                result_str = json.dumps(tool_result, ensure_ascii=False, default=str)
+            except (TypeError, ValueError):
+                result_str = str(tool_result)
+            result_str = truncate_tool_result(result_str)
+
+            tool_msg = ToolMessage(
+                content=result_str,
+                tool_call_id=tool_call_id,
+                name=tool_name,
+            )
+            tool_messages.append(tool_msg)
+
+            # Accumulate structured results keyed by tool name
+            accumulated_tool_results[tool_name] = tool_result
+
+        # Append tool results to the working message list for next LLM call
+        messages.extend(tool_messages)
+
+        # If this was the last allowed iteration, force a final LLM call
+        if iteration == MAX_TOOL_ITERATIONS:
+            logger.warning(
+                "erp_agent_node: reached MAX_TOOL_ITERATIONS=%d — forcing final response",
+                MAX_TOOL_ITERATIONS,
+            )
+            try:
+                t_final = time.perf_counter()
+                final_response: AIMessage = llm_with_tools.invoke(messages)
+                final_ms = (time.perf_counter() - t_final) * 1000
+                logger.debug(
+                    "erp_agent_node: final forced LLM call completed in %.1f ms", final_ms
+                )
+                new_messages.append(final_response)
+            except Exception as exc:
+                logger.exception(
+                    "erp_agent_node: final forced LLM call failed — %s", exc
+                )
+                return {
+                    **state,
+                    "messages": new_messages,
+                    "tool_results": accumulated_tool_results or None,
+                    "error_message": f"Erreur lors de la synthèse finale ERP : {exc}",
+                }
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    logger.info(
+        "erp_agent_node done — %d new messages, %d tool results — %.1f ms total",
+        len(new_messages),
+        len(accumulated_tool_results),
+        elapsed_ms,
+    )
+
+    return {
+        **state,
+        "messages": new_messages,
+        "tool_results": accumulated_tool_results if accumulated_tool_results else None,
+    }
