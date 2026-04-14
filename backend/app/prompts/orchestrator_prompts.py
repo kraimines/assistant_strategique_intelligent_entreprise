@@ -87,16 +87,25 @@ DOMAINES DISPONIBLES
    Utiliser quand la réponse complète nécessite de croiser au moins deux des
    domaines ci-dessus (ex. : "Quels commerciaux ont des congés cette semaine ?").
 
+6. competitive_intel — Veille concurrentielle (scraping web public)
+   Sources : Google News RSS, offres d'emploi, blogs d'entreprises
+   Exemples de sujets : concurrents, veille stratégique, que font nos concurrents,
+                        analyse concurrentielle, Sopra Steria, Vermeg, Capgemini,
+                        recrutement concurrent, mouvements stratégiques, menaces marché,
+                        anticiper la concurrence, benchmark concurrentiel.
+
 ═══════════════════════════════════════════════════════════════════════
 SCHÉMA JSON DE SORTIE (obligatoire, aucun autre texte)
 ═══════════════════════════════════════════════════════════════════════
 
 {{
-  "domain":            "<hr|crm|erp|rag|multi>",
-  "primary_domain":    "<hr|crm|erp|rag>",
+  "domain":            "<hr|crm|erp|rag|multi|competitive_intel>",
+  "primary_domain":    "<hr|crm|erp|rag|competitive_intel>",
   "secondary_domain":  "<hr|crm|erp|rag|null>",
   "confidence":        <0.0-1.0>,
   "requires_write":    <true|false>,
+  "requires_email":    <true|false>,
+  "requires_report":   <true|false>,
   "intent_summary":    "<résumé de l'intention en 1 phrase>",
   "entities_detected": [
     {{"type": "<employee|project|account|opportunity|customer|invoice|po|product|document>",
@@ -110,6 +119,12 @@ Règles :
 - "secondary_domain" est null sauf si "domain" == "multi".
 - "requires_write" est true uniquement pour les opérations INSERT / UPDATE / DELETE
   explicitement demandées (ex. : "crée", "modifie", "supprime", "approuve").
+- "requires_email" est true quand l'utilisateur demande explicitement d'envoyer un email
+  ou un message électronique à quelqu'un (ex. : "envoie un email à", "notifie par email",
+  "écris un mail à", "préviens X par email").
+- "requires_report" est true quand l'utilisateur demande explicitement un rapport,
+  un bilan, un tableau de bord ou une synthèse formelle (ex. : "génère un rapport",
+  "fais un bilan", "rapport mensuel", "rapport de performance", "tableau de bord").
 - "confidence" reflète ta certitude sur le routage (1.0 = absolu).
 - "entities_detected" peut être un tableau vide [].
 - DIFFÉRENCIATION CRM vs ERP :
@@ -117,10 +132,13 @@ Règles :
     • erp  = transactions opérationnelles : factures (SINV), commandes (SO/PO), stocks, paiements
     → "CA clients" sans mention de facture/commande/paiement = crm
 - DIFFÉRENCIATION HR vs RAG :
-    • hr   = données précises sur un employé/projet identifié (avec ID ou nom)
+    • hr   = données précises sur un employé/projet identifié (avec ID OU nom de personne)
+             Cela inclut : salaire, téléphone, email, manager, département, congés,
+             compétences, rôle, contrat — dès qu'un nom ou ID d'employé est mentionné.
     • rag  = questions sur des règles, politiques, procédures générales de l'entreprise
     → "politique de congés", "règlement intérieur", "comment fonctionne X" = rag
-    → "congés de EMP0042", "solde de Pierre" = hr
+    → "congés de EMP0042", "solde de Pierre", "téléphone de Bilel Ferjani",
+       "manager de Zied Kchaou", "salaire de Fatma Haddad" = hr (nom de personne = hr)
 
 ═══════════════════════════════════════════════════════════════════════
 EXEMPLES (few-shot)
@@ -135,6 +153,7 @@ Réponse :
   "secondary_domain": null,
   "confidence": 0.98,
   "requires_write": false,
+  "requires_email": false,
   "intent_summary": "Consultation du solde de congés de l'employé EMP0042.",
   "entities_detected": [
     {{"type": "employee", "id": "EMP0042", "name": null}}
@@ -153,6 +172,38 @@ Réponse :
   "intent_summary": "Recherche des employés du département Data Science ayant un salaire > 5000 DT.",
   "entities_detected": [
     {{"type": "employee", "id": null, "name": null}}
+  ]
+}}
+
+--- Exemple HR 4 (coordonnées employé par nom) ---
+Question : "Donne-moi le numéro de téléphone de Bilel Ferjani."
+Réponse :
+{{
+  "domain": "hr",
+  "primary_domain": "hr",
+  "secondary_domain": null,
+  "confidence": 0.97,
+  "requires_write": false,
+  "requires_email": false,
+  "intent_summary": "Consultation des coordonnées (téléphone) de l'employé Bilel Ferjani.",
+  "entities_detected": [
+    {{"type": "employee", "id": null, "name": "Bilel Ferjani"}}
+  ]
+}}
+
+--- Exemple HR 5 (manager d'un employé par nom) ---
+Question : "Qui est le manager de Zied Kchaou ?"
+Réponse :
+{{
+  "domain": "hr",
+  "primary_domain": "hr",
+  "secondary_domain": null,
+  "confidence": 0.97,
+  "requires_write": false,
+  "requires_email": false,
+  "intent_summary": "Recherche du manager direct de l'employé Zied Kchaou.",
+  "entities_detected": [
+    {{"type": "employee", "id": null, "name": "Zied Kchaou"}}
   ]
 }}
 
@@ -372,6 +423,132 @@ QUESTION DE L'UTILISATEUR
 ═══════════════════════════════════════════════════════════════════════
 
 {user_message}
+
+--- Exemple EMAIL 1 (envoi email après données RH) ---
+Question : "Envoie un email à Ahmed Ben Ali pour lui dire que sa demande de congé EMP0005 est approuvée."
+Réponse :
+{{
+  "domain": "hr",
+  "primary_domain": "hr",
+  "secondary_domain": null,
+  "confidence": 0.97,
+  "requires_write": false,
+  "requires_email": true,
+  "intent_summary": "Notification par email à Ahmed Ben Ali de l'approbation de sa demande de congé.",
+  "entities_detected": [
+    {{"type": "employee", "id": "EMP0005", "name": "Ahmed Ben Ali"}}
+  ]
+}}
+
+--- Exemple EMAIL 2 (envoi email client CRM) ---
+Question : "Notifie le contact de ACC0091 par email que leur opportunité est en phase Négociation."
+Réponse :
+{{
+  "domain": "crm",
+  "primary_domain": "crm",
+  "secondary_domain": null,
+  "confidence": 0.95,
+  "requires_write": false,
+  "requires_email": true,
+  "intent_summary": "Envoi d'un email de notification au contact du compte ACC0091 sur l'avancement de l'opportunité.",
+  "entities_detected": [
+    {{"type": "account", "id": "ACC0091", "name": null}}
+  ]
+}}
+
+--- Exemple EMAIL 3 (envoi email facture ERP) ---
+Question : "Envoie un rappel de paiement par email au client CUS0055 pour sa facture en retard."
+Réponse :
+{{
+  "domain": "erp",
+  "primary_domain": "erp",
+  "secondary_domain": null,
+  "confidence": 0.96,
+  "requires_write": false,
+  "requires_email": true,
+  "intent_summary": "Envoi d'un rappel de paiement par email au client CUS0055 pour facture(s) en retard.",
+  "entities_detected": [
+    {{"type": "customer", "id": "CUS0055", "name": null}}
+  ]
+}}
+
+--- Exemple RAPPORT 1 (rapport RH) ---
+Question : "Génère un rapport mensuel des congés de l'équipe."
+Réponse :
+{{
+  "domain": "hr",
+  "primary_domain": "hr",
+  "secondary_domain": null,
+  "confidence": 0.97,
+  "requires_write": false,
+  "requires_email": false,
+  "requires_report": true,
+  "intent_summary": "Rapport mensuel des congés de l'équipe RH.",
+  "entities_detected": []
+}}
+
+--- Exemple RAPPORT 2 (rapport CRM) ---
+Question : "Fais un bilan du pipeline commercial ce trimestre."
+Réponse :
+{{
+  "domain": "crm",
+  "primary_domain": "crm",
+  "secondary_domain": null,
+  "confidence": 0.96,
+  "requires_write": false,
+  "requires_email": false,
+  "requires_report": true,
+  "intent_summary": "Rapport trimestriel du pipeline commercial CRM.",
+  "entities_detected": []
+}}
+
+--- Exemple RAPPORT 3 (rapport ERP) ---
+Question : "Donne-moi un rapport sur les factures impayées ce mois-ci."
+Réponse :
+{{
+  "domain": "erp",
+  "primary_domain": "erp",
+  "secondary_domain": null,
+  "confidence": 0.97,
+  "requires_write": false,
+  "requires_email": false,
+  "requires_report": true,
+  "intent_summary": "Rapport des factures impayées du mois en cours.",
+  "entities_detected": []
+}}
+
+--- Exemple COMPETITIVE INTEL 1 ---
+Question : "Que font nos concurrents sur l'intelligence artificielle ?"
+Réponse :
+{{
+  "domain": "competitive_intel",
+  "primary_domain": "competitive_intel",
+  "secondary_domain": null,
+  "confidence": 0.95,
+  "requires_write": false,
+  "requires_email": false,
+  "requires_report": false,
+  "intent_summary": "Analyse concurrentielle sur le thème IA — veille web des concurrents.",
+  "entities_detected": []
+}}
+
+--- Exemple COMPETITIVE INTEL 2 ---
+Question : "Analyse les mouvements stratégiques de Sopra Steria et Vermeg."
+Réponse :
+{{
+  "domain": "competitive_intel",
+  "primary_domain": "competitive_intel",
+  "secondary_domain": null,
+  "confidence": 0.97,
+  "requires_write": false,
+  "requires_email": false,
+  "requires_report": false,
+  "intent_summary": "Veille concurrentielle sur Sopra Steria et Vermeg.",
+  "entities_detected": [
+    {{"type": "document", "id": null, "name": "Sopra Steria"}},
+    {{"type": "document", "id": null, "name": "Vermeg"}}
+  ]
+}}
 
 Réponds UNIQUEMENT avec le JSON valide décrit ci-dessus. Aucun texte avant, aucun texte après.
 """

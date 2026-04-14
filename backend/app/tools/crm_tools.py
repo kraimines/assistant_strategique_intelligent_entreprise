@@ -58,6 +58,43 @@ def _row_to_dict(row) -> Dict[str, Any]:
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 @tool
+def search_account_by_name(name: str) -> List[Dict[str, Any]]:
+    """Search CRM accounts by company name (partial match, case-insensitive).
+
+    Use this tool when you have a company name (e.g. "Attijari Bank") but not
+    the account_id. Returns matching accounts with their account_id so you can
+    then call get_account_summary or get_contacts with the correct account_id.
+
+    Args:
+        name: Full or partial company name to search for (e.g. "Attijari", "BIAT", "Leoni").
+    """
+    t0 = time.perf_counter()
+    try:
+        sql = text(
+            """
+            SELECT account_id, name, industry, country, city, phone, website
+            FROM crm.crm_accounts
+            WHERE LOWER(name) LIKE LOWER(:term)
+            ORDER BY name
+            LIMIT 10
+            """
+        )
+        with _Session() as session:
+            rows = session.execute(sql, {"term": f"%{name}%"}).fetchall()
+
+        elapsed = (time.perf_counter() - t0) * 1000
+        logger.info("search_account_by_name('%s') — %d rows — %.1f ms", name, len(rows), elapsed)
+
+        if not rows:
+            return [{"error": f"No account found matching '{name}'"}]
+        return [_row_to_dict(r) for r in rows]
+
+    except Exception as exc:
+        logger.exception("search_account_by_name failed for name=%s", name)
+        return [{"error": str(exc)}]
+
+
+@tool
 def get_account_summary(account_id: str) -> Dict[str, Any]:
     """Return a comprehensive commercial profile for a CRM account.
 
@@ -316,6 +353,137 @@ def get_revenue_history(
 
     except Exception as exc:
         logger.exception("get_revenue_history failed for account_id=%s", account_id)
+        return {"error": str(exc)}
+
+
+@tool
+def get_global_revenue_summary(months: int = 12) -> Dict[str, Any]:
+    """Return the global revenue summary across ALL CRM accounts.
+
+    Primary source: crm_revenue_history (all available history, no date cap).
+    Fallback source: crm_opportunities WHERE stage = 'Closed Won', used when
+    crm_revenue_history contains no data.
+
+    Args:
+        months: Kept for API compatibility — no longer used to filter history.
+                Pass any value; the tool always returns the full available dataset.
+
+    Returns a dict with:
+        - total_revenue   (float)
+        - data_source     ("revenue_history" | "closed_won_opportunities")
+        - top_accounts    (list of {account_id, account_name, total} — top 5)
+        - monthly_totals  (list of {period, total} — only for revenue_history source)
+    """
+    t0 = time.perf_counter()
+    try:
+        # ── Primary: aggregate all crm_revenue_history (no date filter) ─────────
+        top_sql = text(
+            """
+            SELECT
+                r.account_id,
+                a.name AS account_name,
+                SUM(r.revenue) AS total
+            FROM crm.crm_revenue_history r
+            LEFT JOIN crm.crm_accounts a ON a.account_id = r.account_id
+            GROUP BY r.account_id, a.name
+            ORDER BY total DESC
+            LIMIT 5
+            """
+        )
+        monthly_sql = text(
+            """
+            SELECT
+                year_month AS period,
+                SUM(revenue) AS total
+            FROM crm.crm_revenue_history
+            GROUP BY year_month
+            ORDER BY year_month ASC
+            """
+        )
+
+        # ── Fallback: sum Closed Won opportunities ────────────────────────────
+        closed_won_sql = text(
+            """
+            SELECT
+                o.account_id,
+                a.name AS account_name,
+                SUM(o.amount) AS total
+            FROM crm.crm_opportunities o
+            LEFT JOIN crm.crm_accounts a ON a.account_id = o.account_id
+            WHERE o.stage = 'Closed Won'
+            GROUP BY o.account_id, a.name
+            ORDER BY total DESC
+            LIMIT 5
+            """
+        )
+        closed_won_total_sql = text(
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM crm.crm_opportunities
+            WHERE stage = 'Closed Won'
+            """
+        )
+
+        with _Session() as session:
+            top_rows    = session.execute(top_sql).fetchall()
+            monthly_rows = session.execute(monthly_sql).fetchall()
+            cw_rows     = session.execute(closed_won_sql).fetchall()
+            cw_total_row = session.execute(closed_won_total_sql).fetchone()
+
+        monthly_totals = [
+            {"period": r._mapping["period"], "total": float(r._mapping["total"] or 0)}
+            for r in monthly_rows
+        ]
+        revenue_history_total = sum(m["total"] for m in monthly_totals)
+
+        closed_won_total = float(cw_total_row._mapping["total"] or 0) if cw_total_row else 0.0
+
+        elapsed = (time.perf_counter() - t0) * 1000
+
+        if revenue_history_total > 0:
+            # Primary source has data — use it
+            top_accounts = [
+                {
+                    "account_id":   r._mapping["account_id"],
+                    "account_name": r._mapping["account_name"],
+                    "total":        float(r._mapping["total"] or 0),
+                }
+                for r in top_rows
+            ]
+            logger.info(
+                "get_global_revenue_summary — revenue_history total=%.2f — %.1f ms",
+                revenue_history_total, elapsed,
+            )
+            return {
+                "total_revenue": revenue_history_total,
+                "data_source":   "revenue_history",
+                "top_accounts":  top_accounts,
+                "monthly_totals": monthly_totals,
+            }
+
+        # Fallback: crm_revenue_history is empty — use Closed Won opportunities
+        logger.warning(
+            "get_global_revenue_summary — revenue_history empty, "
+            "falling back to closed_won_opportunities total=%.2f — %.1f ms",
+            closed_won_total, elapsed,
+        )
+        cw_top_accounts = [
+            {
+                "account_id":   r._mapping["account_id"],
+                "account_name": r._mapping["account_name"],
+                "total":        float(r._mapping["total"] or 0),
+            }
+            for r in cw_rows
+        ]
+        return {
+            "total_revenue": closed_won_total,
+            "data_source":   "closed_won_opportunities",
+            "top_accounts":  cw_top_accounts,
+            "monthly_totals": [],
+        }
+
+    except Exception as exc:
+        logger.exception("get_global_revenue_summary failed")
         return {"error": str(exc)}
 
 

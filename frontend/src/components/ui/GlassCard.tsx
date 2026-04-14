@@ -32,12 +32,8 @@ export default function GlassCard({
   const content = (
     <div
       onClick={onClick}
-      className={`
-        glass rounded-xl border border-white/8
-        ${hoverClass}
-        ${glowClass}
-        ${className}
-      `}
+      className={`glass rounded-xl ${hoverClass} ${glowClass} ${className}`}
+      style={{ border: '1px solid var(--border-subtle)' }}
     >
       {children}
     </div>

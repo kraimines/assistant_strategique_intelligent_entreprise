@@ -24,6 +24,7 @@ from app.tools.hr_tools import (
     get_leave_balance,
     get_performance_review,
     get_timesheets,
+    search_employee_by_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ MAX_TOOL_ITERATIONS = 3
 # ── Tool registry ─────────────────────────────────────────────────────────────
 
 HR_TOOLS = [
+    search_employee_by_name,
     get_employee_info,
     get_leave_balance,
     create_leave_request,
@@ -83,8 +85,8 @@ def hr_agent_node(state: AgentState) -> AgentState:
     user_id = state.get("user_id", "unknown")
     logger.info("hr_agent_node start — user_id=%s", user_id)
 
-    # ── Initialise accumulators ───────────────────────────────────────────────
-    accumulated_tool_results: Dict[str, Any] = dict(state.get("tool_results") or {})
+    # ── Initialise accumulators — fresh per turn (never inherit previous turn's results) ──
+    accumulated_tool_results: Dict[str, Any] = {}
     tools_by_name = _build_tools_by_name()
     new_messages: List[Any] = []  # messages produced by this node only
 
@@ -99,7 +101,23 @@ def hr_agent_node(state: AgentState) -> AgentState:
         }
 
     # ── Build initial message list ────────────────────────────────────────────
-    system_msg = SystemMessage(content=HR_SYSTEM_PROMPT)
+    _wm = state.get("world_model_snapshot") or {}
+    _wm_context = ""
+    if _wm and _wm.get("records"):
+        lines = ["employee_id | full_name | role | department | manager"]
+        lines.append("---|---|---|---|---")
+        for r in _wm["records"]:
+            lines.append(
+                f"{r.get('employee_id','?')} | {r.get('full_name','?')} | "
+                f"{r.get('role','?')} | {r.get('department','?')} | "
+                f"{r.get('manager') or '—'}"
+            )
+        _wm_context = (
+            "\n\nCONTEXTE ENTREPRISE (World Model — données Neo4j) :\n"
+            + "\n".join(lines)
+        )
+    print(f"[HR] world_model_snapshot present={bool(_wm)} records={_wm.get('count', 0) if _wm else 0} context_len={len(_wm_context)}", flush=True)
+    system_msg = SystemMessage(content=HR_SYSTEM_PROMPT + _wm_context)
     messages: List[Any] = [system_msg] + list(state.get("messages", []))
 
     # ── Tool-calling ReAct loop ───────────────────────────────────────────────
@@ -216,6 +234,13 @@ def hr_agent_node(state: AgentState) -> AgentState:
                     "tool_results": accumulated_tool_results or None,
                     "error_message": f"Erreur lors de la synthèse finale RH : {exc}",
                 }
+
+    # ── If no SQL tools were called, agent answered from World Model directly ──
+    # Store its answer so final_response_node can return it without re-synthesis.
+    if not accumulated_tool_results and new_messages:
+        last_ai = new_messages[-1]
+        if isinstance(last_ai, AIMessage) and last_ai.content:
+            accumulated_tool_results["world_model_answer"] = str(last_ai.content)
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.info(

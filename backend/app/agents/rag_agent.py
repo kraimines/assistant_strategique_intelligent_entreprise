@@ -1,3 +1,4 @@
+
 """RAG specialist agent — ChromaDB + BM25 hybrid retrieval.
 
 PHASE OFFLINE: index_documents() loads documents from ./data/documents/,

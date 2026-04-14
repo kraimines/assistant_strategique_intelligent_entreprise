@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-VALID_DOMAINS = {"hr", "crm", "erp", "rag", "multi"}
+VALID_DOMAINS = {"hr", "crm", "erp", "rag", "multi", "competitive_intel"}
 FALLBACK_DOMAIN = "rag"
 CONFIDENCE_THRESHOLD = 0.7
 MAX_RETRIES = 1  # one retry after the first low-confidence attempt
@@ -158,6 +158,8 @@ def orchestrator_node(state: AgentState) -> AgentState:
     detected_domain: str = FALLBACK_DOMAIN
     domain_confidence: float = 0.0
     requires_write: bool = False
+    requires_email: bool = False
+    requires_report: bool = False
     secondary_domain: Optional[str] = None
     error_message: Optional[str] = state.get("error_message")  # preserve existing
 
@@ -215,6 +217,8 @@ def orchestrator_node(state: AgentState) -> AgentState:
         else None
     )
     requires_write = bool(classification.get("requires_write", False))
+    requires_email = bool(classification.get("requires_email", False))
+    requires_report = bool(classification.get("requires_report", False))
 
     logger.info(
         "Classification attempt 1 — domain=%s confidence=%.2f requires_write=%s",
@@ -280,6 +284,8 @@ def orchestrator_node(state: AgentState) -> AgentState:
                 else None
             )
             requires_write = bool(retry_classification.get("requires_write", requires_write))
+            requires_email = bool(retry_classification.get("requires_email", requires_email))
+            requires_report = bool(retry_classification.get("requires_report", requires_report))
             logger.info(
                 "Retry improved — domain=%s confidence=%.2f",
                 detected_domain,
@@ -333,10 +339,12 @@ def orchestrator_node(state: AgentState) -> AgentState:
     elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.info(
         "orchestrator_node done — domain=%s confidence=%.2f requires_write=%s "
-        "secondary=%s error=%s — total %.1f ms",
+        "requires_email=%s requires_report=%s secondary=%s error=%s — total %.1f ms",
         detected_domain,
         domain_confidence,
         requires_write,
+        requires_email,
+        requires_report,
         secondary_domain,
         error_message,
         elapsed_ms,
@@ -347,6 +355,8 @@ def orchestrator_node(state: AgentState) -> AgentState:
         "detected_domain": detected_domain,
         "domain_confidence": domain_confidence,
         "requires_write": requires_write,
+        "requires_email": requires_email,
+        "requires_report": requires_report,
         "secondary_domain": secondary_domain,
         "error_message": error_message,
         "iteration_count": iteration_count + 1,

@@ -53,22 +53,20 @@ export default function KPICard({ label, value, trend, unit, color = 'cyan', ico
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4 }}
-      className={`
-        rounded-2xl p-5 border ${c.border}
-        transition-all duration-300 hover:scale-[1.02]
-      `}
+      className={`rounded-2xl p-5 transition-all duration-300 hover:scale-[1.02]`}
       style={{
-        background: 'rgba(12, 12, 20, 0.7)',
+        background: 'var(--bg-overlay-card)',
         backdropFilter: 'blur(20px)',
         boxShadow: c.glow,
+        border: `1px solid var(--border-subtle)`,
       }}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-white/50 text-xs font-medium uppercase tracking-wider mb-2">{label}</p>
+          <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{label}</p>
           <div className="flex items-baseline gap-1.5">
             <span className={`text-3xl font-bold ${c.text}`}>{value}</span>
-            {unit && <span className="text-white/40 text-sm">{unit}</span>}
+            {unit && <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{unit}</span>}
           </div>
           {trend !== undefined && (
             <div className="flex items-center gap-1 mt-2">
@@ -82,7 +80,7 @@ export default function KPICard({ label, value, trend, unit, color = 'cyan', ico
               <span className={`text-xs font-medium ${trend > 0 ? 'text-cyber-emerald' : trend < 0 ? 'text-red-400' : 'text-white/30'}`}>
                 {trend > 0 ? '+' : ''}{trend}%
               </span>
-              <span className="text-white/30 text-xs">vs mois dernier</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>vs mois dernier</span>
             </div>
           )}
         </div>

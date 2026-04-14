@@ -22,6 +22,34 @@ class ChatResponse(BaseModel):
     agent_used: Optional[str]        = None
 
 
+# ── History response schemas ──────────────────────────────────────────────────
+
+class MessageOut(BaseModel):
+    role:       Literal["user", "assistant"]
+    content:    str
+    created_at: str  # ISO 8601
+
+
+class ConversationSummary(BaseModel):
+    session_id:      str
+    title:           Optional[str]
+    detected_domain: Optional[str]
+    created_at:      str
+    updated_at:      str
+
+
+class ConversationHistoryResponse(BaseModel):
+    session_id: str
+    messages:   list[MessageOut]
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationSummary]
+    total:         int
+    skip:          int
+    limit:         int
+
+
 class SimulationRequest(BaseModel):
     scenario:    str
     parameters:  dict[str, Any] = Field(default_factory=dict)

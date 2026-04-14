@@ -29,10 +29,11 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         className="flex justify-end mb-4"
       >
         <div
-          className="max-w-[75%] px-5 py-3.5 rounded-2xl rounded-tr-md text-sm text-white leading-relaxed"
+          className="max-w-[75%] px-5 py-3.5 rounded-2xl rounded-tr-md text-sm leading-relaxed"
           style={{
             background: 'linear-gradient(135deg, rgba(0,212,255,0.2), rgba(124,58,237,0.2))',
             border: '1px solid rgba(0,212,255,0.25)',
+            color: 'var(--text-primary)',
           }}
         >
           {message.content}
@@ -56,10 +57,11 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* Message bubble */}
       <div
-        className="px-5 py-4 rounded-2xl rounded-tl-md text-sm text-white/85 leading-relaxed"
+        className="px-5 py-4 rounded-2xl rounded-tl-md text-sm leading-relaxed"
         style={{
-          background: 'rgba(18, 18, 30, 0.85)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'var(--bg-overlay-card)',
+          border: '1px solid var(--border-subtle)',
+          color: 'var(--text-primary)',
         }}
       >
         {message.isStreaming && message.content === '' ? (
@@ -75,7 +77,16 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         ) : (
           <div className="markdown-body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                table: ({ children }) => (
+                  <div style={{ overflowX: 'auto', width: '100%', margin: '0.75em 0' }}>
+                    <table>{children}</table>
+                  </div>
+                ),
+              }}
+            >{message.content}</ReactMarkdown>
             {message.isStreaming && (
               <motion.span
                 animate={{ opacity: [1, 0] }}
@@ -92,21 +103,23 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         <div className="flex items-center gap-2 mt-2 ml-1">
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 text-white/30 hover:text-white/70 text-xs transition-colors"
+            className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: 'var(--text-muted)' }}
           >
             {copied ? <Check size={13} className="text-cyber-emerald" /> : <Copy size={13} />}
             {copied ? 'Copié' : 'Copier'}
           </button>
-          <span className="text-white/15">|</span>
+          <span style={{ color: 'var(--text-muted)' }}>|</span>
           <button
             onClick={() => setReaction('up')}
-            className={`transition-colors ${reaction === 'up' ? 'text-cyber-emerald' : 'text-white/30 hover:text-white/60'}`}
+            className={`transition-colors ${reaction === 'up' ? 'text-cyber-emerald' : ''}`}
+            style={reaction !== 'up' ? { color: 'var(--text-muted)' } : {}}
           >
             <ThumbsUp size={13} />
           </button>
           <button
             onClick={() => setReaction('down')}
-            className={`transition-colors ${reaction === 'down' ? 'text-red-400' : 'text-white/30 hover:text-white/60'}`}
+            className={`transition-colors ${reaction === 'down' ? 'text-red-400' : ''}`}
+            style={reaction !== 'down' ? { color: 'var(--text-muted)' } : {}}
           >
             <ThumbsDown size={13} />
           </button>

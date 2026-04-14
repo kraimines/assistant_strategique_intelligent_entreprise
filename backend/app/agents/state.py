@@ -47,6 +47,21 @@ class AgentState(TypedDict):
     secondary_domain:
         Optional second domain identified for cross-domain (multi) queries,
         e.g. "hr" when the primary is "crm".
+    requires_email:
+        True when the user intent implies sending an email.  Triggers the
+        email_agent_node after domain data has been gathered.
+    requires_report:
+        True when the user intent implies generating a formal report (rapport).
+        The final_response_node will use REPORT_PROMPT instead of the default
+        synthesis prompt, producing a structured Markdown report with header,
+        date, executive summary and sections.
+    email_result:
+        Metadata about the email that was sent: recipient, subject, and
+        SMTP result string.  Populated by email_agent_node.
+    world_model_snapshot:
+        Snapshot Neo4j du domaine détecté, injecté dans le system prompt
+        des domain agents.  {} si Neo4j est indisponible.  None avant
+        que world_model_node ne s'exécute.
     """
 
     messages: Annotated[list, add_messages]
@@ -58,9 +73,13 @@ class AgentState(TypedDict):
     rag_context: Optional[str]
     final_response: Optional[str]
     requires_write: bool
+    requires_email: bool
+    requires_report: bool
+    email_result: Optional[Dict[str, Any]]
     error_message: Optional[str]
     iteration_count: int
     secondary_domain: Optional[str]
+    world_model_snapshot: Optional[Dict[str, Any]]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,9 +117,13 @@ def initial_state(user_id: str, user_role: str, message: str) -> AgentState:
         rag_context=None,
         final_response=None,
         requires_write=False,
+        requires_email=False,
+        requires_report=False,
+        email_result=None,
         error_message=None,
         iteration_count=0,
         secondary_domain=None,
+        world_model_snapshot=None,
     )
 
 

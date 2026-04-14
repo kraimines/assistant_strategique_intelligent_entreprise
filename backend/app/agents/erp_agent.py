@@ -82,7 +82,7 @@ def erp_agent_node(state: AgentState) -> AgentState:
     logger.info("erp_agent_node start — user_id=%s", user_id)
 
     # ── Initialise accumulators ───────────────────────────────────────────────
-    accumulated_tool_results: Dict[str, Any] = dict(state.get("tool_results") or {})
+    accumulated_tool_results: Dict[str, Any] = {}  # fresh per turn
     tools_by_name = _build_tools_by_name()
     new_messages: List[Any] = []  # messages produced by this node only
 
@@ -97,7 +97,22 @@ def erp_agent_node(state: AgentState) -> AgentState:
         }
 
     # ── Build initial message list ────────────────────────────────────────────
-    system_msg = SystemMessage(content=ERP_SYSTEM_PROMPT)
+    _wm = state.get("world_model_snapshot") or {}
+    _wm_context = ""
+    if _wm and _wm.get("records"):
+        lines = ["invoice_id | payment_status | amount | customer | customer_id"]
+        lines.append("---|---|---|---|---")
+        for r in _wm["records"]:
+            lines.append(
+                f"{r.get('invoice_id','?')} | {r.get('payment_status','?')} | "
+                f"{r.get('amount','?')} | {r.get('customer','?')} | "
+                f"{r.get('customer_id','?')}"
+            )
+        _wm_context = (
+            "\n\nCONTEXTE ENTREPRISE (World Model — données Neo4j) :\n"
+            + "\n".join(lines)
+        )
+    system_msg = SystemMessage(content=ERP_SYSTEM_PROMPT + _wm_context)
     messages: List[Any] = [system_msg] + list(state.get("messages", []))
 
     # ── Tool-calling ReAct loop ───────────────────────────────────────────────
@@ -214,6 +229,11 @@ def erp_agent_node(state: AgentState) -> AgentState:
                     "tool_results": accumulated_tool_results or None,
                     "error_message": f"Erreur lors de la synthèse finale ERP : {exc}",
                 }
+
+    if not accumulated_tool_results and new_messages:
+        last_ai = new_messages[-1]
+        if isinstance(last_ai, AIMessage) and last_ai.content:
+            accumulated_tool_results["world_model_answer"] = str(last_ai.content)
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.info(

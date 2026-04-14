@@ -1,4 +1,6 @@
+import React from 'react';
 import { motion } from 'framer-motion';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell,
@@ -17,13 +19,7 @@ import {
   adminKPIs, monthlyRevenue, revenueBySegment, strategicAlerts,
 } from '../data/mockDashboard';
 
-const tooltipStyle = {
-  backgroundColor: 'rgba(12,12,20,0.95)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: '12px',
-  color: '#fff',
-  fontSize: '12px',
-};
+// Tooltip style is computed per-render inside each sub-component using useTheme.
 
 const statusBadge: Record<string, 'emerald' | 'amber' | 'red'> = {
   Approved: 'emerald',
@@ -32,6 +28,17 @@ const statusBadge: Record<string, 'emerald' | 'amber' | 'red'> = {
 };
 
 function EmployeeDashboard() {
+  const { theme } = useTheme();
+  const tooltipStyle = {
+    backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.98)' : 'rgba(12,12,20,0.95)',
+    border: `1px solid ${theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
+    borderRadius: '12px',
+    color: theme === 'light' ? '#1a202c' : '#fff',
+    fontSize: '12px',
+  };
+  const gridColor = theme === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.05)';
+  const axisColor = theme === 'light' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+
   return (
     <div className="p-6 space-y-6">
       {/* KPIs */}
@@ -46,7 +53,7 @@ function EmployeeDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Hours chart */}
         <GlassCard animate className="p-5">
-          <h3 className="text-white font-semibold mb-4 text-sm">Heures travaillées / semaine</h3>
+          <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' }}>Heures travaillées / semaine</h3>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={hoursPerWeek}>
               <defs>
@@ -55,9 +62,9 @@ function EmployeeDashboard() {
                   <stop offset="95%" stopColor="#00d4ff" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+              <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={tooltipStyle} />
               <Area type="monotone" dataKey="value" stroke="#00d4ff" strokeWidth={2} fill="url(#hoursGrad)" dot={{ fill: '#00d4ff', r: 3 }} />
             </AreaChart>
@@ -66,7 +73,7 @@ function EmployeeDashboard() {
 
         {/* Project progress */}
         <GlassCard animate className="p-5">
-          <h3 className="text-white font-semibold mb-4 text-sm">Avancement des projets</h3>
+          <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' }}>Avancement des projets</h3>
           <div className="space-y-4">
             {projectProgress.map((p) => (
               <div key={p.name}>
@@ -91,7 +98,7 @@ function EmployeeDashboard() {
 
       {/* Leave requests */}
       <GlassCard animate className="p-5">
-        <h3 className="text-white font-semibold mb-4 text-sm">Mes demandes de congé</h3>
+        <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' } as React.CSSProperties}>Mes demandes de congé</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -124,6 +131,17 @@ function EmployeeDashboard() {
 }
 
 function ManagerDashboard() {
+  const { theme } = useTheme();
+  const tooltipStyle = {
+    backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.98)' : 'rgba(12,12,20,0.95)',
+    border: `1px solid ${theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
+    borderRadius: '12px',
+    color: theme === 'light' ? '#1a202c' : '#fff',
+    fontSize: '12px',
+  };
+  const gridColor = theme === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.05)';
+  const axisColor = theme === 'light' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
@@ -137,12 +155,12 @@ function ManagerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Team workload */}
         <GlassCard animate className="p-5 lg:col-span-2">
-          <h3 className="text-white font-semibold mb-4 text-sm">Charge de travail équipe (h/semaine)</h3>
+          <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' } as React.CSSProperties}>Charge de travail équipe (h/semaine)</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={teamWorkload}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+              <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={tooltipStyle} />
               <Bar dataKey="value" fill="#00d4ff" radius={[4, 4, 0, 0]} fillOpacity={0.85} name="Heures normales" />
               <Bar dataKey="overflow" fill="#ef4444" radius={[4, 4, 0, 0]} fillOpacity={0.7} name="Dépassement" />
@@ -152,7 +170,7 @@ function ManagerDashboard() {
 
         {/* Project status donut */}
         <GlassCard animate className="p-5">
-          <h3 className="text-white font-semibold mb-4 text-sm">Statut des projets</h3>
+          <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' } as React.CSSProperties}>Statut des projets</h3>
           <ResponsiveContainer width="100%" height={160}>
             <PieChart>
               <Pie data={projectStatusDist} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" paddingAngle={3}>
@@ -176,7 +194,7 @@ function ManagerDashboard() {
 
       {/* Pending approvals */}
       <GlassCard animate className="p-5">
-        <h3 className="text-white font-semibold mb-4 text-sm">Approbations en attente</h3>
+        <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' } as React.CSSProperties}>Approbations en attente</h3>
         <div className="space-y-3">
           {pendingApprovals.map((a) => (
             <div key={a.id} className="flex items-center justify-between p-3.5 rounded-xl bg-white/3 border border-white/6 hover:border-white/12 transition-all">
@@ -197,6 +215,18 @@ function ManagerDashboard() {
 }
 
 function AdminDashboard() {
+  const { theme } = useTheme();
+  const tooltipStyle = {
+    backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.98)' : 'rgba(12,12,20,0.95)',
+    border: `1px solid ${theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
+    borderRadius: '12px',
+    color: theme === 'light' ? '#1a202c' : '#fff',
+    fontSize: '12px',
+  };
+  const gridColor = theme === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.05)';
+  const axisColor = theme === 'light' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+  const legendColor = theme === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
@@ -233,7 +263,7 @@ function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue area chart */}
         <GlassCard animate className="p-5 lg:col-span-2">
-          <h3 className="text-white font-semibold mb-4 text-sm">Chiffre d'affaires mensuel (TND)</h3>
+          <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' } as React.CSSProperties}>Chiffre d'affaires mensuel (TND)</h3>
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={monthlyRevenue}>
               <defs>
@@ -242,9 +272,9 @@ function AdminDashboard() {
                   <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+              <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v.toLocaleString()} TND`, 'CA']} />
               <Area type="monotone" dataKey="value" stroke="#7c3aed" strokeWidth={2} fill="url(#revGrad)" dot={{ fill: '#7c3aed', r: 3 }} />
             </AreaChart>
@@ -253,14 +283,14 @@ function AdminDashboard() {
 
         {/* Revenue by segment */}
         <GlassCard animate className="p-5 lg:col-span-2">
-          <h3 className="text-white font-semibold mb-4 text-sm">CA par secteur vs objectif</h3>
+          <h3 className="font-semibold mb-4 text-sm" style={{ color: 'var(--text-primary)' } as React.CSSProperties}>CA par secteur vs objectif</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={revenueBySegment}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+              <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v.toLocaleString()} TND`]} />
-              <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }} />
+              <Legend wrapperStyle={{ color: legendColor, fontSize: 11 }} />
               <Bar dataKey="value" fill="#00d4ff" radius={[4, 4, 0, 0]} fillOpacity={0.85} name="Réalisé" />
               <Bar dataKey="target" fill="#7c3aed" radius={[4, 4, 0, 0]} fillOpacity={0.5} name="Objectif" />
             </BarChart>

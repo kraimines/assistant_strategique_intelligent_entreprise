@@ -76,6 +76,80 @@ def _business_days(start: date, end: date) -> int:
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 @tool
+def search_employee_by_name(name: str) -> List[Dict[str, Any]]:
+    """Search HR employees by first name, last name, or full name (partial match).
+
+    Use this tool when you have a person's name but not their employee_id.
+    Returns a list of matching employees with their employee_id, so you can
+    then call get_employee_info with the correct employee_id.
+
+    Args:
+        name: Full name, first name, or last name to search for (case-insensitive).
+              Examples: "Fatma Haddad", "Haddad", "Fatma".
+    """
+    t0 = time.perf_counter()
+    try:
+        parts = name.strip().split()
+        if len(parts) >= 2:
+            # Try full name match first (first + last)
+            sql = text(
+                """
+                SELECT employee_id, first_name, last_name, email, phone, role,
+                       department_id, manager_id, contract_type, city
+                FROM hr.hr_employees
+                WHERE LOWER(first_name || ' ' || last_name) LIKE LOWER(:full)
+                   OR LOWER(last_name || ' ' || first_name) LIKE LOWER(:full)
+                ORDER BY last_name, first_name
+                LIMIT 10
+                """
+            )
+            with _Session() as session:
+                rows = session.execute(sql, {"full": f"%{name}%"}).fetchall()
+            if not rows:
+                # Fallback: search each part separately
+                sql2 = text(
+                    """
+                    SELECT employee_id, first_name, last_name, role,
+                           department_id, manager_id, contract_type, city
+                    FROM hr.hr_employees
+                    WHERE LOWER(first_name) LIKE LOWER(:first)
+                       OR LOWER(last_name) LIKE LOWER(:last)
+                    ORDER BY last_name, first_name
+                    LIMIT 10
+                    """
+                )
+                with _Session() as session:
+                    rows = session.execute(
+                        sql2, {"first": f"%{parts[0]}%", "last": f"%{parts[-1]}%"}
+                    ).fetchall()
+        else:
+            sql = text(
+                """
+                SELECT employee_id, first_name, last_name, email, phone, role,
+                       department_id, manager_id, contract_type, city
+                FROM hr.hr_employees
+                WHERE LOWER(first_name) LIKE LOWER(:term)
+                   OR LOWER(last_name) LIKE LOWER(:term)
+                ORDER BY last_name, first_name
+                LIMIT 10
+                """
+            )
+            with _Session() as session:
+                rows = session.execute(sql, {"term": f"%{name}%"}).fetchall()
+
+        elapsed = (time.perf_counter() - t0) * 1000
+        logger.info("search_employee_by_name('%s') — %d rows — %.1f ms", name, len(rows), elapsed)
+
+        if not rows:
+            return [{"error": f"No employee found matching '{name}'"}]
+        return [_row_to_dict(r) for r in rows]
+
+    except Exception as exc:
+        logger.exception("search_employee_by_name failed for name=%s", name)
+        return [{"error": str(exc)}]
+
+
+@tool
 def get_employee_info(employee_id: str) -> Dict[str, Any]:
     """Retrieve the full profile of an HR employee by their employee_id.
 
@@ -93,9 +167,9 @@ def get_employee_info(employee_id: str) -> Dict[str, Any]:
         sql = text(
             """
             SELECT
-                employee_id, first_name, last_name, role,
+                employee_id, first_name, last_name, email, phone, role,
                 department_id, hire_date, salary, manager_id,
-                contract_type, city, hourly_cost, capacity_hours_per_week
+                contract_type, country, city, hourly_cost, capacity_hours_per_week
             FROM hr.hr_employees
             WHERE employee_id = :employee_id
             """

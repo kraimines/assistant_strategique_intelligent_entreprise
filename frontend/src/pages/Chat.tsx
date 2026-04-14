@@ -1,12 +1,13 @@
-import { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, MessageSquare, Zap, Mic, AlertTriangle } from 'lucide-react';
+import { Send, Plus, MessageSquare, Zap, Mic, AlertTriangle, Trash2, Loader2 } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import MessageBubble from '../components/chat/MessageBubble';
 import { useChat } from '../hooks/useChat';
 import { useAuthStore } from '../stores/authStore';
+import { chatHistoryApi } from '../api/client';
 import { nanoid } from '../utils/nanoid';
-import type { Conversation } from '../types';
+import type { ChatMessage } from '../types';
 
 const roleChips: Record<string, string[]> = {
   employee: [
@@ -36,60 +37,123 @@ const predictiveBanners = [
 ];
 
 interface ConvSummary {
-  id: string;
+  session_id: string;
   title: string;
-  updatedAt: Date;
+  detected_domain: string | null;
+  updated_at: string;
 }
 
 export default function Chat() {
   const { user } = useAuthStore();
-  const { messages, isStreaming, sendMessage, clearMessages } = useChat();
+  const { messages, isStreaming, conversationId, sendMessage, loadConversation, clearMessages } = useChat();
+
   const [input, setInput] = useState('');
-  const [conversations, setConversations] = useState<ConvSummary[]>([
-    { id: 'c1', title: 'Analyse RH Q1 2026', updatedAt: new Date('2026-04-06') },
-    { id: 'c2', title: 'Opportunités CRM', updatedAt: new Date('2026-04-05') },
-    { id: 'c3', title: 'Facturation ERP', updatedAt: new Date('2026-04-04') },
-  ]);
-  const [activeConv, setActiveConv] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConvSummary[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [loadingConvId, setLoadingConvId] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Scroll to bottom on new message ──────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ── Load conversation list on mount ──────────────────────────────────────
+  const refreshList = useCallback(async () => {
+    try {
+      const res = await chatHistoryApi.list();
+      setConversations(res.data.conversations ?? []);
+    } catch {
+      // silently ignore — history is non-critical
+    }
+  }, []);
+
+  useEffect(() => { refreshList(); }, [refreshList]);
+
+  // ── Refresh list after streaming ends ────────────────────────────────────
+  useEffect(() => {
+    if (!isStreaming && messages.length > 0) refreshList();
+  }, [isStreaming, messages.length, refreshList]);
+
+  // ── Click a conversation in the sidebar ──────────────────────────────────
+  const handleConvClick = useCallback(async (sessionId: string) => {
+    if (loadingConvId || isStreaming) return;
+    setLoadingConvId(sessionId);
+    try {
+      const res = await chatHistoryApi.getMessages(sessionId);
+      const raw: { role: string; content: string; created_at: string }[] =
+        res.data.messages ?? [];
+      const history: ChatMessage[] = raw.map((m) => ({
+        id: nanoid(),
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(m.created_at),
+      }));
+      loadConversation(sessionId, history);
+      setActiveConvId(sessionId);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingConvId(null);
+    }
+  }, [loadingConvId, isStreaming, loadConversation]);
+
+  // ── Delete a conversation ─────────────────────────────────────────────────
+  const handleDelete = useCallback(async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    try {
+      await chatHistoryApi.delete(sessionId);
+      setConversations((prev) => prev.filter((c) => c.session_id !== sessionId));
+      if (activeConvId === sessionId) {
+        clearMessages();
+        setActiveConvId(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeConvId, clearMessages]);
+
+  // ── New conversation ──────────────────────────────────────────────────────
+  const handleNewChat = () => {
+    clearMessages();
+    setActiveConvId(null);
+  };
+
+  // ── Send ──────────────────────────────────────────────────────────────────
   const handleSend = () => {
     if (!input.trim() || isStreaming) return;
     const text = input.trim();
     setInput('');
+    // Use the current conversationId from the hook (tracks active session)
+    setActiveConvId(conversationId);
     sendMessage(text);
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleNewChat = () => {
-    const id = nanoid();
-    setConversations((prev) => [{ id, title: 'Nouvelle conversation', updatedAt: new Date() }, ...prev]);
-    setActiveConv(id);
-    clearMessages();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const chips = roleChips[user?.role || 'employee'];
   const banner = predictiveBanners[showBanner % predictiveBanners.length];
 
+  const domainColor: Record<string, string> = {
+    hr:  'text-emerald-400',
+    crm: 'text-cyber-cyan',
+    erp: 'text-amber-400',
+    rag: 'text-violet-400',
+  };
+
   return (
     <AppShell title="Assistant IA">
       <div className="flex h-full">
-        {/* Left sidebar - conversations */}
+
+        {/* ── Sidebar ─────────────────────────────────────────────────────── */}
         <aside
-          className="w-64 flex-shrink-0 flex flex-col border-r border-white/6 h-full"
-          style={{ background: 'rgba(10,10,15,0.8)' }}
+          className="w-64 flex-shrink-0 flex flex-col h-full"
+          style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-overlay)' }}
         >
           <div className="p-3">
             <button
@@ -102,32 +166,56 @@ export default function Chat() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1">
+            {conversations.length === 0 && (
+              <p className="text-xs text-center mt-6 px-3" style={{ color: 'var(--text-muted)' }}>
+                Aucune conversation enregistrée
+              </p>
+            )}
             {conversations.map((c) => (
               <button
-                key={c.id}
-                onClick={() => setActiveConv(c.id)}
-                className={`
-                  w-full text-left px-3 py-2.5 rounded-xl transition-all group
-                  ${activeConv === c.id
-                    ? 'bg-white/8 text-white'
-                    : 'text-white/50 hover:text-white/80 hover:bg-white/5'
-                  }
-                `}
+                key={c.session_id}
+                onClick={() => handleConvClick(c.session_id)}
+                className="w-full text-left px-3 py-2.5 rounded-xl transition-all group relative"
+                style={{
+                  background: activeConvId === c.session_id ? 'var(--conv-active-bg)' : undefined,
+                  color: activeConvId === c.session_id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                }}
               >
-                <div className="flex items-center gap-2">
-                  <MessageSquare size={13} className="flex-shrink-0 text-white/30" />
-                  <span className="text-xs truncate">{c.title}</span>
+                <div className="flex items-center gap-2 pr-6">
+                  {loadingConvId === c.session_id ? (
+                    <Loader2 size={13} className="flex-shrink-0 text-cyber-cyan animate-spin" />
+                  ) : (
+                    <MessageSquare size={13} className="flex-shrink-0 text-white/30" />
+                  )}
+                  <span className="text-xs truncate">{c.title || 'Conversation'}</span>
                 </div>
-                <p className="text-white/25 text-[10px] mt-1 pl-5">
-                  {c.updatedAt.toLocaleDateString('fr-FR')}
-                </p>
+                <div className="flex items-center gap-2 mt-1 pl-5">
+                  {c.detected_domain && (
+                    <span className={`text-[10px] font-medium uppercase ${domainColor[c.detected_domain] ?? 'text-white/30'}`}>
+                      {c.detected_domain}
+                    </span>
+                  )}
+                  <span className="text-white/25 text-[10px]">
+                    {new Date(c.updated_at).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+
+                {/* Delete button (visible on hover) */}
+                <button
+                  onClick={(e) => handleDelete(e, c.session_id)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-white/30 transition-all"
+                  title="Supprimer"
+                >
+                  <Trash2 size={12} />
+                </button>
               </button>
             ))}
           </div>
         </aside>
 
-        {/* Main chat area */}
+        {/* ── Main chat area ───────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0">
+
           {/* Predictive banner */}
           <AnimatePresence>
             <motion.div
@@ -166,21 +254,16 @@ export default function Chat() {
                   <Zap size={32} className="text-white" />
                 </motion.div>
                 <div>
-                  <h2 className="text-white text-xl font-bold mb-2">Comment puis-je vous aider ?</h2>
-                  <p className="text-white/40 text-sm">Posez une question sur vos données RH, CRM ou ERP</p>
+                  <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Comment puis-je vous aider ?</h2>
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Posez une question sur vos données RH, CRM ou ERP</p>
                 </div>
-
-                {/* Quick suggestion chips */}
                 <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                   {chips.map((chip) => (
                     <motion.button
                       key={chip}
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
-                      onClick={() => {
-                        setInput(chip);
-                        inputRef.current?.focus();
-                      }}
+                      onClick={() => { setInput(chip); inputRef.current?.focus(); }}
                       className="px-4 py-2 rounded-xl glass border border-white/10 text-white/60 text-sm hover:text-white hover:border-cyber-cyan/35 transition-all"
                     >
                       {chip}
@@ -199,16 +282,16 @@ export default function Chat() {
           </div>
 
           {/* Input area */}
-          <div className="px-6 py-4 border-t border-white/6">
+          <div className="px-6 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             <div className="max-w-3xl mx-auto">
               <div
                 className="flex items-end gap-3 rounded-2xl p-3"
                 style={{
-                  background: 'rgba(18,18,28,0.85)',
+                  background: 'var(--bg-overlay-input)',
                   backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid var(--input-border)',
                   boxShadow: isStreaming ? '0 0 20px rgba(0,212,255,0.1)' : 'none',
-                  transition: 'box-shadow 0.3s',
+                  transition: 'box-shadow 0.3s, background 0.3s',
                 }}
               >
                 <textarea
@@ -219,41 +302,31 @@ export default function Chat() {
                   placeholder="Posez votre question... (Entrée pour envoyer, Maj+Entrée pour saut de ligne)"
                   disabled={isStreaming}
                   rows={1}
-                  className="
-                    flex-1 bg-transparent text-white text-sm placeholder:text-white/25
-                    focus:outline-none resize-none max-h-36 overflow-y-auto
-                    leading-relaxed py-1
-                  "
-                  style={{ fieldSizing: 'content' } as React.CSSProperties}
+                  className="flex-1 bg-transparent text-sm focus:outline-none resize-none max-h-36 overflow-y-auto leading-relaxed py-1 chat-textarea"
+                  style={{ color: 'var(--text-primary)', fieldSizing: 'content' } as React.CSSProperties}
                 />
-
-                {/* Mic button */}
                 <button className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/8 transition-all flex-shrink-0">
                   <Mic size={16} />
                 </button>
-
-                {/* Send button */}
                 <motion.button
                   whileTap={{ scale: 0.92 }}
                   onClick={handleSend}
                   disabled={!input.trim() || isStreaming}
                   className={`
-                    w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
-                    transition-all duration-200
+                    w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200
                     ${input.trim() && !isStreaming
                       ? 'bg-gradient-to-br from-cyber-cyan to-cyber-violet text-white shadow-[0_0_15px_rgba(0,212,255,0.3)]'
                       : 'bg-white/8 text-white/25 cursor-not-allowed'
                     }
                   `}
                 >
-                  {isStreaming ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Send size={15} />
-                  )}
+                  {isStreaming
+                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Send size={15} />
+                  }
                 </motion.button>
               </div>
-              <p className="text-white/20 text-xs text-center mt-2">
+              <p className="text-xs text-center mt-2" style={{ color: 'var(--text-muted)' }}>
                 Les réponses IA peuvent contenir des erreurs. Vérifiez les informations importantes.
               </p>
             </div>

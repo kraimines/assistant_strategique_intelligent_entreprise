@@ -9,11 +9,24 @@ export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AgentType | null>(null);
+  const [conversationId, setConversationId] = useState<string>(() => nanoid());
   const abortRef = useRef<AbortController | null>(null);
 
+  /** Restore a conversation loaded from the history API. */
+  const loadConversation = useCallback((sessionId: string, history: ChatMessage[]) => {
+    abortRef.current?.abort();
+    setConversationId(sessionId);
+    setMessages(history);
+    setIsStreaming(false);
+    setCurrentAgent(null);
+  }, []);
+
   const sendMessage = useCallback(
-    async (text: string, conversationId?: string) => {
+    async (text: string, convId?: string) => {
       if (!text.trim() || isStreaming) return;
+
+      // Use explicit convId if provided, otherwise fall back to the current state
+      const activeConvId = convId ?? conversationId;
 
       const userMsg: ChatMessage = {
         id: nanoid(),
@@ -36,7 +49,6 @@ export function useChat() {
       abortRef.current = new AbortController();
 
       try {
-        // Use streaming endpoint with fetch + ReadableStream
         const res = await fetch(`${API_BASE_URL}/api/v1/chat/stream`, {
           method: 'POST',
           headers: {
@@ -45,7 +57,7 @@ export function useChat() {
           },
           body: JSON.stringify({
             message: text,
-            ...(conversationId ? { conversation_id: conversationId } : {}),
+            conversation_id: activeConvId,
           }),
           signal: abortRef.current.signal,
         });
@@ -64,9 +76,7 @@ export function useChat() {
         }
 
         const reader = res.body?.getReader();
-        if (!reader) {
-          throw new Error('No readable stream');
-        }
+        if (!reader) throw new Error('No readable stream');
 
         const decoder = new TextDecoder();
         let buffer = '';
@@ -93,6 +103,8 @@ export function useChat() {
                   return [...prev.slice(0, -1), { ...last, agent: event.agent }];
                 });
               } else if (event.type === 'done') {
+                // Sync conversation_id with whatever the backend confirmed
+                if (event.conversation_id) setConversationId(event.conversation_id);
                 setMessages((prev) => {
                   const last = prev[prev.length - 1];
                   if (!last?.isStreaming) return prev;
@@ -120,10 +132,8 @@ export function useChat() {
           processLines(lines);
         }
 
-        // Process remaining buffer
         if (buffer.trim()) processLines([buffer]);
 
-        // Ensure streaming is done
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (!last?.isStreaming) return prev;
@@ -137,7 +147,6 @@ export function useChat() {
 
         console.error('Chat error:', err);
 
-        // Fallback: try non-streaming endpoint
         try {
           const res2 = await fetch(`${API_BASE_URL}/api/v1/chat`, {
             method: 'POST',
@@ -145,7 +154,7 @@ export function useChat() {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token || 'dev-token'}`,
             },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({ message: text, conversation_id: activeConvId }),
           });
           const data = await res2.json();
           const reply = data.reply || data.detail || 'Erreur inconnue.';
@@ -160,14 +169,14 @@ export function useChat() {
             if (!last?.isStreaming) return prev;
             return [
               ...prev.slice(0, -1),
-              { ...last, content: 'Impossible de contacter le serveur. Vérifiez que le backend tourne sur le port 8001.', isStreaming: false },
+              { ...last, content: 'Impossible de contacter le serveur.', isStreaming: false },
             ];
           });
         }
         setIsStreaming(false);
       }
     },
-    [token, isStreaming]
+    [token, isStreaming, conversationId]
   );
 
   const clearMessages = useCallback(() => {
@@ -175,7 +184,16 @@ export function useChat() {
     setMessages([]);
     setIsStreaming(false);
     setCurrentAgent(null);
+    setConversationId(nanoid()); // fresh ID for the new conversation
   }, []);
 
-  return { messages, isStreaming, currentAgent, sendMessage, clearMessages };
+  return {
+    messages,
+    isStreaming,
+    currentAgent,
+    conversationId,
+    sendMessage,
+    loadConversation,
+    clearMessages,
+  };
 }

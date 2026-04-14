@@ -52,6 +52,16 @@ export const chatApi = {
     api.post('/chat', { message, conversation_id: conversationId }),
 };
 
+// Chat history endpoints
+export const chatHistoryApi = {
+  list: (skip = 0, limit = 30) =>
+    api.get('/chat/history', { params: { skip, limit } }),
+  getMessages: (sessionId: string) =>
+    api.get(`/chat/history/${sessionId}`),
+  delete: (sessionId: string) =>
+    api.delete(`/chat/history/${sessionId}`),
+};
+
 // Stats endpoint
 export const statsApi = {
   getHRStats: () => api.get('/stats/hr'),

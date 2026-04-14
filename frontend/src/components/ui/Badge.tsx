@@ -12,7 +12,7 @@ const variants = {
   emerald: 'bg-cyber-emerald/10 text-cyber-emerald border border-cyber-emerald/30',
   amber: 'bg-cyber-amber/10 text-cyber-amber border border-cyber-amber/30',
   pink: 'bg-cyber-pink/10 text-cyber-pink border border-cyber-pink/30',
-  gray: 'bg-white/5 text-white/50 border border-white/10',
+  gray: 'bg-white/5 border border-white/10',
   red: 'bg-red-500/10 text-red-400 border border-red-500/30',
 };
 

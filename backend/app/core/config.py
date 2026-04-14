@@ -2,13 +2,13 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -21,14 +21,27 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000", "http://localhost:5174", "http://127.0.0.1:5173"]
+    # Stocké comme str pour éviter que pydantic-settings v2 tente json.loads()
+    # avant le validator sur les champs List[str].
+    cors_origins_raw: str = Field(
+        default="http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174",
+        alias="cors_origins",
+        validation_alias=AliasChoices("cors_origins", "cors_origins_raw"),
+    )
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors(cls, v: object) -> List[str]:
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v  # type: ignore[return-value]
+    @property
+    def cors_origins(self) -> List[str]:  # type: ignore[override]
+        """Parse CORS origins — accepte virgule ou JSON array."""
+        import json as _json
+        v = (self.cors_origins_raw or "").strip()
+        if not v:
+            return ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+        if v.startswith("["):
+            try:
+                return _json.loads(v)
+            except _json.JSONDecodeError:
+                pass
+        return [o.strip() for o in v.split(",") if o.strip()]
 
     # ── JWT ───────────────────────────────────────────────────────────────────
     secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"
@@ -113,6 +126,32 @@ class Settings(BaseSettings):
 
     # ── ChromaDB ─────────────────────────────────────────────────────────────
     chroma_persist_dir: str = "./chroma_db"
+
+    # ── SMTP (envoi d'emails) ─────────────────────────────────────────────────
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_use_tls: bool = True
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
+    # ── Market Analysis Agent ─────────────────────────────────────────────────
+    # NewsAPI (https://newsapi.org) — 100 req/day free
+    newsapi_key: str = ""
+    # GNews (https://gnews.io) — 100 req/day free
+    gnews_key: str = ""
+    # Alpha Vantage (https://www.alphavantage.co) — 25 req/day free (yfinance fallback)
+    alpha_vantage_key: str = ""
+    # Polygon.io (https://polygon.io) — market data (optional premium)
+    polygon_key: str = ""
+    # Slack webhook for critical alerts (optional)
+    slack_webhook_url: str = ""
+    # Pipeline interval in minutes (default 30)
+    market_analysis_interval_minutes: int = 30
+    # Alert threshold: talan_impact_score >= this value triggers an alert
+    market_alert_threshold: float = 0.4
+    # GNN model checkpoint path
+    gnn_model_path: str = "./gnn_model.pt"
 
 
 @lru_cache

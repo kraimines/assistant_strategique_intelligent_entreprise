@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Network, GitBranch, Globe, Lightbulb, Search, X, Database, ExternalLink } from 'lucide-react';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -86,27 +87,28 @@ function KnowledgeGraphTab() {
   return (
     <div className="flex h-full">
       {/* Controls */}
-      <div className="w-56 flex-shrink-0 flex flex-col gap-3 p-4 border-r border-white/6">
+      <div className="w-56 flex-shrink-0 flex flex-col gap-3 p-4 border-r">
         <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Rechercher un nœud"
-            className="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-white/5 border border-white/10 text-white placeholder:text-white/25 focus:outline-none focus:border-cyber-cyan/40"
+            className="theme-input w-full pl-8 pr-3 py-2 rounded-xl text-xs focus:border-cyber-cyan/40"
           />
         </div>
 
         <div className="space-y-1">
-          <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Filtrer par type</p>
+          <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Filtrer par type</p>
           {nodeTypeFilters.map(({ type, label, color }) => (
             <button
               key={type}
               onClick={() => toggleFilter(type)}
-              className={`
-                w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all
-                ${activeFilters.has(type) ? 'bg-white/8 text-white' : 'text-white/40 hover:bg-white/5'}
-              `}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all"
+              style={{
+                background: activeFilters.has(type) ? 'var(--conv-active-bg)' : undefined,
+                color: activeFilters.has(type) ? 'var(--text-primary)' : 'var(--text-secondary)',
+              }}
             >
               <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color, opacity: activeFilters.has(type) ? 1 : 0.3 }} />
               {label}
@@ -115,17 +117,17 @@ function KnowledgeGraphTab() {
         </div>
 
         <div className="space-y-1">
-          <p className="text-white/40 text-[10px] uppercase tracking-wider mb-2">Zoom</p>
+          <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Zoom</p>
           <div className="flex gap-1.5">
             <button
               onClick={() => (graphRef.current as { zoom: (n: number, d?: number) => void } | null)?.zoom?.(1.5, 400)}
-              className="flex-1 py-1.5 rounded-lg bg-white/5 border border-white/8 text-white/50 text-xs hover:text-white hover:bg-white/10 transition-all"
+              className="theme-input flex-1 py-1.5 rounded-lg text-xs transition-all"
             >
               +
             </button>
             <button
               onClick={() => (graphRef.current as { zoom: (n: number, d?: number) => void } | null)?.zoom?.(0.7, 400)}
-              className="flex-1 py-1.5 rounded-lg bg-white/5 border border-white/8 text-white/50 text-xs hover:text-white hover:bg-white/10 transition-all"
+              className="theme-input flex-1 py-1.5 rounded-lg text-xs transition-all"
             >
               −
             </button>
@@ -179,8 +181,8 @@ function KnowledgeGraphTab() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 320, opacity: 0 }}
             transition={{ type: 'spring', damping: 25 }}
-            className="w-72 flex-shrink-0 border-l border-white/6 p-4 overflow-y-auto"
-            style={{ background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(20px)' }}
+            className="w-72 flex-shrink-0 border-l p-4 overflow-y-auto"
+            style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(20px)', borderLeft: '1px solid var(--border-subtle)' }}
           >
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -247,6 +249,8 @@ function KnowledgeGraphTab() {
 
 function DepartmentTab() {
   const [selected, setSelected] = useState<(typeof departments)[0] | null>(null);
+  const { theme } = useTheme();
+  const svgTextColor = theme === 'light' ? '#1a202c' : '#ffffff';
   const svgWidth = 800;
   const svgHeight = 400;
   const centerX = svgWidth / 2;
@@ -292,7 +296,7 @@ function DepartmentTab() {
                 cx={dept.x}
                 cy={dept.y}
                 r={30}
-                fill="rgba(18,18,30,0.9)"
+                fill="var(--bg-card)"
                 stroke={selected?.id === dept.id ? '#7c3aed' : 'rgba(124,58,237,0.3)'}
                 strokeWidth={selected?.id === dept.id ? 2 : 1}
               />
@@ -301,7 +305,7 @@ function DepartmentTab() {
                 y={dept.y}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fill="white"
+                fill={svgTextColor}
                 fontSize={11}
                 fontWeight={600}
               >
@@ -328,7 +332,7 @@ function DepartmentTab() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               className="absolute bottom-4 right-4 w-64 p-4 rounded-xl"
-              style={{ background: 'rgba(12,12,20,0.95)', border: '1px solid rgba(124,58,237,0.3)' }}
+              style={{ background: 'var(--bg-overlay-card)', border: '1px solid rgba(124,58,237,0.4)' }}
             >
               <div className="flex justify-between items-start mb-3">
                 <h4 className="text-white font-semibold text-sm">{selected.name}</h4>
@@ -442,7 +446,7 @@ export default function DigitalTwin() {
     <AppShell title="Digital Twin">
       <div className="flex flex-col h-full">
         {/* Tabs */}
-        <div className="flex items-center gap-1 px-5 py-3 border-b border-white/6 overflow-x-auto">
+        <div className="flex items-center gap-1 px-5 py-3 border-b overflow-x-auto">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}

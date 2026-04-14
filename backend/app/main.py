@@ -11,7 +11,10 @@ from app.core.config import settings
 from app.core.database import Base, engine_crm, engine_erp, engine_hr
 from app.models import crm_models, erp_models, hr_models  # noqa: F401
 from app.models import user_models  # noqa: F401 — registers User in Base.metadata
-from app.api.routes import auth, chat, crm, erp, hr, simulate, stats
+from app.models import conversation_models  # noqa: F401 — registers chat_conversations/chat_messages
+from app.api.routes import auth, chat, crm, erp, hr, simulate, stats, graph
+from app.api.routes import competitive_intel
+from app.api.routes import market_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ async def lifespan(_app: FastAPI):
     async with engine_hr.begin() as conn:
         await conn.run_sync(
             Base.metadata.create_all,
-            tables=_tables_for("hr_") + _tables_for("users"),
+            tables=_tables_for("hr_") + _tables_for("users") + _tables_for("chat_"),
         )
     async with engine_crm.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=_tables_for("crm_"))
@@ -98,10 +101,40 @@ async def lifespan(_app: FastAPI):
         logger.warning("APScheduler not started: %s", exc)
         scheduler = None  # type: ignore[assignment]
 
+    # ── Market Analysis Pipeline — starts background scheduler ────────────────
+    try:
+        from app.services.market_analysis.orchestrator import MarketAnalysisOrchestrator
+        from app.models.market_analysis_models import (
+            MarketRawArticle, MarketNewsAnalysis,
+            MarketAlert as MarketAlertModel, MarketReport as MarketReportModel,
+            MarketPipelineRun,
+        )
+        # Create market analysis tables in hr DB
+        async with engine_hr.begin() as conn:
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[
+                    MarketRawArticle.__table__,
+                    MarketNewsAnalysis.__table__,
+                    MarketAlertModel.__table__,
+                    MarketReportModel.__table__,
+                    MarketPipelineRun.__table__,
+                ],
+            )
+        market_orchestrator = MarketAnalysisOrchestrator.get_instance()
+        market_orchestrator.start()
+        logger.info("MarketAnalysisOrchestrator started")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("MarketAnalysisOrchestrator not started: %s", exc)
+        market_orchestrator = None  # type: ignore[assignment]
+
     yield
 
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
+
+    if market_orchestrator:
+        market_orchestrator.stop()
 
 
 # ── Application ───────────────────────────────────────────────────────────────
@@ -143,6 +176,9 @@ app.include_router(erp.router,      prefix="/api/v1/erp",      tags=["erp"])
 app.include_router(stats.router,    prefix="/api/v1/stats",    tags=["stats"])
 app.include_router(chat.router,     prefix="/api/v1/chat",     tags=["chat"])
 app.include_router(simulate.router, prefix="/api/v1/simulate", tags=["simulate"])
+app.include_router(graph.router,    prefix="/api/v1/graph",    tags=["graph"])
+app.include_router(competitive_intel.router, prefix="/api/v1", tags=["competitive-intel"])
+app.include_router(market_analysis.router,  prefix="/api/v1", tags=["market-analysis"])
 
 
 # ── System endpoints ──────────────────────────────────────────────────────────
@@ -153,6 +189,43 @@ async def health():
     from app.core.database import ping_all
     db_status = await ping_all()
     return {"status": "ok", "service": "talan-api", "version": app.version, "databases": db_status}
+
+
+@app.get("/health/smtp", tags=["system"], summary="SMTP connectivity check")
+def health_smtp():
+    """Vérifie que les identifiants SMTP sont configurés et tente une connexion au serveur."""
+    import smtplib
+    configured = bool(settings.smtp_user and settings.smtp_password)
+    if not configured:
+        return {
+            "status": "error",
+            "configured": False,
+            "smtp_user": settings.smtp_user or "(vide)",
+            "message": "SMTP_USER ou SMTP_PASSWORD manquant dans .env",
+        }
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=5) as server:
+            server.ehlo()
+            if settings.smtp_use_tls:
+                server.starttls()
+                server.ehlo()
+            server.login(settings.smtp_user, settings.smtp_password)
+        return {
+            "status": "ok",
+            "configured": True,
+            "smtp_user": settings.smtp_user,
+            "smtp_host": settings.smtp_host,
+            "message": "Connexion SMTP réussie — prêt à envoyer des emails.",
+        }
+    except smtplib.SMTPAuthenticationError:
+        return {
+            "status": "error",
+            "configured": True,
+            "smtp_user": settings.smtp_user,
+            "message": "Authentification échouée — vérifie le mot de passe d'application Gmail.",
+        }
+    except Exception as exc:
+        return {"status": "error", "configured": True, "message": str(exc)}
 
 
 @app.get("/", tags=["system"], summary="API root")

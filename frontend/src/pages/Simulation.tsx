@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 import { motion } from 'framer-motion';
 import { FlaskConical, Play, RotateCcw, AlertTriangle, TrendingDown, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts';
@@ -61,15 +62,19 @@ const severityBadge: Record<string, 'red' | 'amber' | 'cyan'> = {
   info: 'cyan',
 };
 
-const tooltipStyle = {
-  backgroundColor: 'rgba(12,12,20,0.95)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: '12px',
-  color: '#fff',
-  fontSize: '12px',
-};
-
 export default function Simulation() {
+  const { theme } = useTheme();
+  const tooltipStyle = {
+    backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.98)' : 'rgba(12,12,20,0.95)',
+    border: `1px solid ${theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
+    borderRadius: '12px',
+    color: theme === 'light' ? '#1a202c' : '#fff',
+    fontSize: '12px',
+  };
+  const gridColor = theme === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.05)';
+  const axisColor = theme === 'light' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+  const legendColor = theme === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
+
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<boolean>(false);
@@ -211,11 +216,11 @@ export default function Simulation() {
               <h3 className="text-white font-semibold mb-4 text-sm">Projection CA sur 12 mois (K TND)</h3>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={baseChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                  <XAxis dataKey="month" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v}K TND`]} />
-                  <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }} />
+                  <Legend wrapperStyle={{ color: legendColor, fontSize: 11 }} />
                   <Line type="monotone" dataKey="base" stroke="#10b981" strokeWidth={2} dot={false} name="Scénario actuel" />
                   <Line type="monotone" dataKey="simulated" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Sans Tunisie Telecom" />
                 </LineChart>

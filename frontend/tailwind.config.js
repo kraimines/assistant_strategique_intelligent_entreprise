@@ -5,10 +5,10 @@ export default {
     extend: {
       colors: {
         cyber: {
-          black: '#0a0a0f',
-          dark: '#0d0d14',
-          card: '#12121a',
-          border: '#1a1a2e',
+          black: 'var(--cyber-black)',
+          dark: 'var(--cyber-dark)',
+          card: 'var(--cyber-card)',
+          border: 'var(--cyber-border)',
           cyan: '#00d4ff',
           'cyan-dim': '#00a8cc',
           violet: '#7c3aed',

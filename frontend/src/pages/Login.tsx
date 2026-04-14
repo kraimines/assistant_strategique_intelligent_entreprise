@@ -35,9 +35,9 @@ export default function Login() {
         <div
           className="rounded-2xl p-8"
           style={{
-            background: 'rgba(12, 12, 20, 0.85)',
+            background: 'var(--bg-overlay-card)',
             backdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border-subtle)',
             boxShadow: '0 0 60px rgba(0,212,255,0.05)',
           }}
         >
@@ -51,8 +51,8 @@ export default function Login() {
             >
               <Zap size={28} className="text-white" />
             </motion.div>
-            <h1 className="text-2xl font-bold text-white">Talan Intelligence</h1>
-            <p className="text-white/40 text-sm mt-1">Connectez-vous à votre espace</p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Talan Intelligence</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Connectez-vous à votre espace</p>
           </div>
 
           {error && (
@@ -68,49 +68,38 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-white/60 text-sm font-medium">Email</label>
+              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Email</label>
               <div className="relative">
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="vous@talan.com"
                   required
-                  className="
-                    w-full pl-10 pr-4 py-3 rounded-xl text-sm
-                    bg-white/5 border border-white/10
-                    text-white placeholder:text-white/20
-                    focus:outline-none focus:border-cyber-cyan/50 focus:bg-white/8
-                    transition-all duration-200
-                  "
+                  className="theme-input w-full pl-10 pr-4 py-3 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all duration-200"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="text-white/60 text-sm font-medium">Mot de passe</label>
+              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Mot de passe</label>
               <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="
-                    w-full pl-10 pr-12 py-3 rounded-xl text-sm
-                    bg-white/5 border border-white/10
-                    text-white placeholder:text-white/20
-                    focus:outline-none focus:border-cyber-cyan/50 focus:bg-white/8
-                    transition-all duration-200
-                  "
+                  className="theme-input w-full pl-10 pr-12 py-3 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all duration-200"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
                 >
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -122,7 +111,7 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-center text-white/40 text-sm mt-6">
+          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-secondary)' }}>
             Pas encore de compte ?{' '}
             <Link to="/signup" className="text-cyber-cyan hover:text-white transition-colors">
               Créer un compte

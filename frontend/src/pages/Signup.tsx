@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Zap, Mail, Lock, User, Users, Target } from 'lucide-react';
@@ -57,9 +57,9 @@ export default function Signup() {
         <div
           className="rounded-2xl p-8"
           style={{
-            background: 'rgba(12, 12, 20, 0.85)',
+            background: 'var(--bg-overlay-card)',
             backdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border-subtle)',
           }}
         >
           {/* Logo */}
@@ -70,8 +70,8 @@ export default function Signup() {
             >
               <Zap size={24} className="text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white">Créer un compte</h1>
-            <p className="text-white/40 text-sm mt-1">Rejoignez Talan Intelligence Platform</p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Créer un compte</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Rejoignez Talan Intelligence Platform</p>
           </div>
 
           {(error || passError) && (
@@ -84,32 +84,32 @@ export default function Signup() {
             {/* Name row */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-white/60 text-xs font-medium">Prénom</label>
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' } as React.CSSProperties}>Prénom</label>
                 <input
                   type="text"
                   value={form.first_name}
                   onChange={(e) => handleChange('first_name', e.target.value)}
                   required
                   placeholder="Ines"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/20 focus:outline-none focus:border-cyber-cyan/50 transition-all"
+                  className="theme-input w-full px-3.5 py-2.5 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-white/60 text-xs font-medium">Nom</label>
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' } as React.CSSProperties}>Nom</label>
                 <input
                   type="text"
                   value={form.last_name}
                   onChange={(e) => handleChange('last_name', e.target.value)}
                   required
                   placeholder="Ben Ali"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/20 focus:outline-none focus:border-cyber-cyan/50 transition-all"
+                  className="theme-input w-full px-3.5 py-2.5 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all"
                 />
               </div>
             </div>
 
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-white/60 text-xs font-medium">Email</label>
+              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' } as React.CSSProperties}>Email</label>
               <div className="relative">
                 <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
                 <input
@@ -118,7 +118,7 @@ export default function Signup() {
                   onChange={(e) => handleChange('email', e.target.value)}
                   required
                   placeholder="vous@talan.com"
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/20 focus:outline-none focus:border-cyber-cyan/50 transition-all"
+                  className="theme-input w-full pl-9 pr-4 py-2.5 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all"
                 />
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function Signup() {
             {/* Password */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-white/60 text-xs font-medium">Mot de passe</label>
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' } as React.CSSProperties}>Mot de passe</label>
                 <div className="relative">
                   <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
                   <input
@@ -135,7 +135,7 @@ export default function Signup() {
                     onChange={(e) => handleChange('password', e.target.value)}
                     required
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-9 py-2.5 rounded-xl text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/20 focus:outline-none focus:border-cyber-cyan/50 transition-all"
+                    className="theme-input w-full pl-9 pr-9 py-2.5 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all"
                   />
                   <button
                     type="button"
@@ -147,21 +147,21 @@ export default function Signup() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-white/60 text-xs font-medium">Confirmer</label>
+                <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' } as React.CSSProperties}>Confirmer</label>
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={form.confirmPassword}
                   onChange={(e) => handleChange('confirmPassword', e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/20 focus:outline-none focus:border-cyber-cyan/50 transition-all"
+                  className="theme-input w-full px-3.5 py-2.5 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all"
                 />
               </div>
             </div>
 
             {/* Role selector */}
             <div className="space-y-2">
-              <label className="text-white/60 text-xs font-medium">Rôle</label>
+              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' } as React.CSSProperties}>Rôle</label>
               <div className="grid grid-cols-3 gap-2">
                 {roles.map(({ value, icon: Icon, title, desc }) => (
                   <motion.button
@@ -170,22 +170,21 @@ export default function Signup() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setRole(value)}
-                    className={`
-                      p-3 rounded-xl border text-left transition-all duration-200
-                      ${role === value
-                        ? 'bg-cyber-cyan/10 border-cyber-cyan/50 shadow-[0_0_15px_rgba(0,212,255,0.15)]'
-                        : 'bg-white/3 border-white/8 hover:border-white/20'
-                      }
-                    `}
+                    className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                      role === value ? 'bg-cyber-cyan/10 border-cyber-cyan/50 shadow-[0_0_15px_rgba(0,212,255,0.15)]' : ''
+                    }`}
+                    style={role !== value ? { background: 'var(--input-bg)', borderColor: 'var(--input-border)' } : {}}
                   >
                     <Icon
                       size={18}
-                      className={`mb-1.5 ${role === value ? 'text-cyber-cyan' : 'text-white/40'}`}
+                      className={`mb-1.5 ${role === value ? 'text-cyber-cyan' : ''}`}
+                      style={role !== value ? { color: 'var(--text-muted)' } : {}}
                     />
-                    <p className={`text-xs font-semibold ${role === value ? 'text-white' : 'text-white/60'}`}>
+                    <p className={`text-xs font-semibold ${role === value ? 'text-white' : ''}`}
+                       style={role !== value ? { color: 'var(--text-secondary)' } : {}}>
                       {title}
                     </p>
-                    <p className="text-white/30 text-[10px] mt-0.5 leading-tight">{desc}</p>
+                    <p className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--text-muted)' }}>{desc}</p>
                   </motion.button>
                 ))}
               </div>
@@ -196,7 +195,7 @@ export default function Signup() {
             </Button>
           </form>
 
-          <p className="text-center text-white/40 text-sm mt-5">
+          <p className="text-center text-sm mt-5" style={{ color: 'var(--text-secondary)' }}>
             Déjà un compte ?{' '}
             <Link to="/login" className="text-cyber-cyan hover:text-white transition-colors">
               Se connecter
