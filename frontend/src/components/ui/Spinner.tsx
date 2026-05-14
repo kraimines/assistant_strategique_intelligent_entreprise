@@ -9,7 +9,7 @@ const sizes = {
   lg: 'w-10 h-10 border-3',
 };
 
-export default function Spinner({ size = 'md', color = 'border-cyber-cyan' }: SpinnerProps) {
+export default function Spinner({ size = 'md', color = 'border-primary' }: SpinnerProps) {
   return (
     <div
       className={`${sizes[size]} ${color} border-t-transparent rounded-full animate-spin`}

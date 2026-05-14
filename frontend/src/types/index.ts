@@ -34,6 +34,9 @@ export interface ChatMessage {
   timestamp: Date;
   isStreaming?: boolean;
   toolResults?: ToolResult[];
+  isReport?: boolean;
+  meetingData?: import('./meetingTypes').MeetingData;
+
 }
 
 export interface Conversation {

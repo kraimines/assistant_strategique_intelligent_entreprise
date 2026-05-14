@@ -74,6 +74,22 @@ data/raw/*.xls
 data/raw/*.xlsm
 
 # ============================
+# Claude Code local settings (may contain credentials)
+# ============================
+.claude/settings.local.json
+
+# ============================
+# ML models, datasets, checkpoints
+# ============================
+backend/gnn_model.pt
+backend/*.pt
+backend/gnn_dataset/
+backend/app/services/market_analysis/checkpoints/
+backend/app/services/market_analysis/.cache/
+backend/app/services/market_analysis/results/
+backend/app/services/market_analysis/gnn_causal_dataset/
+
+# ============================
 # Logs / Temp
 # ============================
 *.log

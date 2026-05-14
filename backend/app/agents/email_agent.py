@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
-from app.core.llm import get_llm, invoke_with_retry
+from app.core.llm import get_text_llm, invoke_with_retry
 from app.services.email_service import send_email as smtp_send
 
 logger = logging.getLogger(__name__)
@@ -157,7 +157,7 @@ def email_agent_node(state: AgentState) -> AgentState:
 
     # ── Appel LLM pour composer l'email ──────────────────────────────────────
     try:
-        llm = get_llm()
+        llm = get_text_llm()
         messages = [
             SystemMessage(content="Tu es un assistant de rédaction d'emails professionnels. Réponds UNIQUEMENT en JSON valide."),
             HumanMessage(content=prompt),

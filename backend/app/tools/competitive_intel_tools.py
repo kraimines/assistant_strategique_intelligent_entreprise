@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 from urllib.parse import quote_plus
 
 import httpx
@@ -535,3 +535,424 @@ def analyze_competitive_landscape(
         "total_jobs": jobs_data.get("total_jobs_found", 0) if isinstance(jobs_data, dict) else 0,
         "analyzed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Agentic tools (read stored intelligence — no live scraping) ───────────────
+
+@tool
+def query_stored_intel(company_name: str, days: int = 7) -> dict:
+    """Query the competitive intelligence knowledge base for stored snapshots.
+
+    Returns the latest snapshots and trend summary for a company WITHOUT
+    triggering any live scraping. The agent should call this FIRST before
+    deciding whether fresh data is needed.
+
+    Args:
+        company_name: Competitor name (e.g. 'Capgemini').
+        days:         Look-back window in days (default 7).
+
+    Returns:
+        Dict with latest_snapshot, trend (threat_level over time),
+        pending_alerts, data_age_hours.
+    """
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import Session
+    from functools import lru_cache
+    from app.core.config import settings
+
+    @lru_cache(maxsize=1)
+    def _engine():
+        return create_engine(settings.database_url("hr"), pool_pre_ping=True)
+
+    try:
+        engine = _engine()
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+
+        with Session(engine) as session:
+            # Latest full snapshot
+            row = session.execute(
+                text(
+                    "SELECT id, radar_scores, threat_level, threat_label, "
+                    "key_moves, anticipated_moves, hiring_signals, "
+                    "llm_assessment, llm_vulnerability, llm_response, "
+                    "is_significant, delta_scores, change_summary, "
+                    "financial_data, snapshot_at "
+                    "FROM ci_snapshots "
+                    "WHERE company_name = :name "
+                    "ORDER BY snapshot_at DESC LIMIT 1"
+                ),
+                {"name": company_name},
+            ).fetchone()
+
+            if not row:
+                return {
+                    "company": company_name,
+                    "status": "no_data",
+                    "message": f"No stored intelligence for '{company_name}'. "
+                               "Trigger a fresh scan with scrape_company_news.",
+                }
+
+            latest = {
+                "id":              row[0],
+                "radar_scores":    row[1],
+                "threat_level":    row[2],
+                "threat_label":    row[3],
+                "key_moves":       (row[4] or [])[:5],
+                "anticipated_moves": (row[5] or [])[:5],
+                "hiring_signals":  (row[6] or [])[:5],
+                "llm_assessment":  row[7],
+                "llm_vulnerability": row[8],
+                "llm_response":    row[9],
+                "is_significant":  row[10],
+                "delta_scores":    row[11],
+                "change_summary":  row[12],
+                "financial_summary": {
+                    k: v for k, v in (row[13] or {}).items()
+                    if k in ("price_change_1m_pct", "analyst_recommendation",
+                             "market_cap", "revenue_growth_yoy")
+                },
+                "snapshot_at": str(row[14]),
+            }
+
+            # Age of data
+            snapshot_dt = row[14]
+            if hasattr(snapshot_dt, "timestamp"):
+                age_hours = round(
+                    (datetime.utcnow() - snapshot_dt).total_seconds() / 3600, 1
+                )
+            else:
+                age_hours = None
+
+            # Threat trend over the look-back window
+            trend_rows = session.execute(
+                text(
+                    "SELECT threat_level, snapshot_at "
+                    "FROM ci_snapshots "
+                    "WHERE company_name = :name AND snapshot_at >= :cutoff "
+                    "ORDER BY snapshot_at ASC"
+                ),
+                {"name": company_name, "cutoff": cutoff},
+            ).fetchall()
+            trend = [
+                {"threat_level": r[0], "at": str(r[1])}
+                for r in trend_rows
+            ]
+
+            # Unacknowledged alerts
+            alert_rows = session.execute(
+                text(
+                    "SELECT level, title, created_at "
+                    "FROM ci_alerts "
+                    "WHERE company_name = :name AND acknowledged = false "
+                    "ORDER BY created_at DESC LIMIT 3"
+                ),
+                {"name": company_name},
+            ).fetchall()
+            pending_alerts = [
+                {"level": r[0], "title": r[1], "at": str(r[2])}
+                for r in alert_rows
+            ]
+
+        return {
+            "company":       company_name,
+            "status":        "ok",
+            "data_age_hours": age_hours,
+            "latest":        latest,
+            "trend":         trend,
+            "pending_alerts": pending_alerts,
+            "stale":         (age_hours or 0) > 6,
+        }
+    except Exception as exc:
+        return {"company": company_name, "error": str(exc)}
+
+
+@tool
+def detect_strategic_shift(company_name: str, baseline_days: int = 7) -> dict:
+    """Compare the latest snapshot to the N-day baseline average to detect
+    significant strategic changes.
+
+    Use this after query_stored_intel when you want to understand if the
+    current threat level represents a meaningful trend change.
+
+    Args:
+        company_name:   Competitor name.
+        baseline_days:  Days to use as baseline for comparison (default 7).
+
+    Returns:
+        Dict with per-axis deltas, shift_detected flag, shift_description,
+        most_changed_axis, and strategic_interpretation.
+    """
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import Session
+    from functools import lru_cache
+    from app.core.config import settings
+
+    @lru_cache(maxsize=1)
+    def _engine():
+        return create_engine(settings.database_url("hr"), pool_pre_ping=True)
+
+    try:
+        engine = _engine()
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=baseline_days)
+
+        with Session(engine) as session:
+            # Latest snapshot scores
+            latest_row = session.execute(
+                text(
+                    "SELECT radar_scores, threat_level, financial_data, snapshot_at "
+                    "FROM ci_snapshots WHERE company_name = :name "
+                    "ORDER BY snapshot_at DESC LIMIT 1"
+                ),
+                {"name": company_name},
+            ).fetchone()
+
+            if not latest_row:
+                return {"company": company_name, "error": "No data available."}
+
+            latest_scores  = latest_row[0] or {}
+            latest_threat  = latest_row[1] or 0.0
+            latest_fin     = latest_row[2] or {}
+
+            # Baseline: average of snapshots in the look-back window (excluding latest)
+            baseline_rows = session.execute(
+                text(
+                    "SELECT radar_scores, threat_level FROM ci_snapshots "
+                    "WHERE company_name = :name AND snapshot_at >= :cutoff "
+                    "ORDER BY snapshot_at ASC"
+                ),
+                {"name": company_name, "cutoff": cutoff},
+            ).fetchall()
+
+        if len(baseline_rows) < 2:
+            return {
+                "company": company_name,
+                "shift_detected": False,
+                "message": "Not enough historical data for shift detection (need ≥2 snapshots).",
+            }
+
+        # Compute baseline averages (exclude last row = latest)
+        baseline_samples = baseline_rows[:-1]
+        baseline_avg: Dict[str, float] = {}
+        for axis in latest_scores:
+            vals = [r[0].get(axis, 0) for r in baseline_samples if r[0]]
+            baseline_avg[axis] = sum(vals) / len(vals) if vals else 0.0
+
+        baseline_threat_avg = sum(r[1] or 0 for r in baseline_samples) / len(baseline_samples)
+
+        # Delta
+        delta = {
+            axis: round(latest_scores.get(axis, 0) - baseline_avg.get(axis, 0), 1)
+            for axis in latest_scores
+        }
+        threat_delta = round(latest_threat - baseline_threat_avg, 3)
+
+        # Most changed axis
+        most_changed_axis = max(delta, key=lambda k: abs(delta[k])) if delta else None
+        max_delta = abs(delta.get(most_changed_axis, 0)) if most_changed_axis else 0
+
+        shift_detected = max_delta >= CHANGE_THRESHOLD or abs(threat_delta) >= 0.10
+
+        # Strategic interpretation
+        interpretation = []
+        for axis, d in delta.items():
+            if abs(d) >= CHANGE_THRESHOLD:
+                direction = "increased" if d > 0 else "decreased"
+                interpretation.append(
+                    f"{axis} score {direction} by {abs(d):.0f} pts — "
+                    + _AXIS_INTERPRETATIONS.get(axis, {}).get("up" if d > 0 else "down", "")
+                )
+
+        price_change = latest_fin.get("price_change_1m_pct")
+        if price_change is not None and abs(price_change) >= 5:
+            interpretation.append(
+                f"Stock moved {price_change:+.1f}% in the last month — "
+                + ("possible M&A or major contract win" if price_change > 0
+                   else "financial pressure or investor concern")
+            )
+
+        return {
+            "company":            company_name,
+            "shift_detected":     shift_detected,
+            "threat_delta":       threat_delta,
+            "axis_deltas":        delta,
+            "most_changed_axis":  most_changed_axis,
+            "max_axis_delta":     max_delta,
+            "baseline_days":      baseline_days,
+            "baseline_samples":   len(baseline_samples),
+            "strategic_interpretation": interpretation,
+            "shift_description": (
+                f"Significant shift on {most_changed_axis}: {delta.get(most_changed_axis, 0):+.0f}pts "
+                f"vs {baseline_days}-day baseline."
+                if shift_detected else
+                f"No significant shift detected for {company_name} vs {baseline_days}-day baseline."
+            ),
+        }
+    except Exception as exc:
+        return {"company": company_name, "error": str(exc)}
+
+
+# Axis interpretation lookup used by detect_strategic_shift
+_AXIS_INTERPRETATIONS: Dict[str, Dict[str, str]] = {
+    "IA_Générative": {
+        "up":   "likely preparing an AI/GenAI product launch in 3–6 months",
+        "down": "reducing AI investment or pivoting away from GenAI",
+    },
+    "Cloud": {
+        "up":   "accelerating cloud migration or cloud-native offering",
+        "down": "cloud activity stabilizing or shifting to other priorities",
+    },
+    "Recrutement": {
+        "up":   "operational capacity expansion — watch for service area growth",
+        "down": "hiring freeze or restructuring underway",
+    },
+    "Partenariats": {
+        "up":   "alliance or acquisition likely in next 3–9 months",
+        "down": "partnership activity quieting",
+    },
+    "Innovation_Produit": {
+        "up":   "product or platform launch imminent",
+        "down": "innovation activity consolidating",
+    },
+}
+
+
+@tool
+def get_competitor_financial_data(ticker: str, company_name: str) -> dict:
+    """Fetch real-time stock performance and financial health for a
+    publicly traded competitor via yfinance.
+
+    Use this when the user asks about financial strength, stock trends,
+    or when detecting a financial signal in stored data.
+
+    Args:
+        ticker:       Yahoo Finance ticker (e.g. 'CAP.PA', 'SOP.PA', 'ACN').
+        company_name: Human-readable company name for labeling.
+
+    Returns:
+        Dict with price_change_1m_pct, market_cap, pe_ratio,
+        revenue_growth_yoy, analyst_recommendation, recent_news_titles.
+    """
+    cache_key = f"fin:{ticker}"
+    cached = _cache_get(cache_key)
+    if cached:
+        logger.info("get_competitor_financial_data: cache hit for '%s'", ticker)
+        return cached
+
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+        hist = t.history(period="1mo")
+
+        price_change = None
+        if not hist.empty and len(hist) >= 2:
+            price_change = round(
+                (hist["Close"].iloc[-1] - hist["Close"].iloc[0])
+                / hist["Close"].iloc[0] * 100, 2,
+            )
+
+        news  = t.news or []
+        result = {
+            "company":                company_name,
+            "ticker":                 ticker,
+            "price_change_1m_pct":    price_change,
+            "market_cap":             info.get("marketCap"),
+            "pe_ratio":               info.get("trailingPE"),
+            "revenue_growth_yoy":     info.get("revenueGrowth"),
+            "profit_margins":         info.get("profitMargins"),
+            "analyst_recommendation": info.get("recommendationKey"),
+            "number_of_analysts":     info.get("numberOfAnalystOpinions"),
+            "52w_high":               info.get("fiftyTwoWeekHigh"),
+            "52w_low":                info.get("fiftyTwoWeekLow"),
+            "recent_news_titles":     [n.get("title", "") for n in news[:5]],
+            "fetched_at":             datetime.now(timezone.utc).isoformat(),
+        }
+        _cache_set(cache_key, result)
+        return result
+    except Exception as exc:
+        return {"ticker": ticker, "company": company_name, "error": str(exc)}
+
+
+@tool
+def get_competitor_kg_context(company_name: str) -> dict:
+    """Query the Neo4j Knowledge Graph for a competitor's nodes, relationships,
+    and causal chains that may affect Talan.
+
+    Use this to understand how a competitor is positioned in the broader
+    market graph — their sector relationships, shared entities with Talan,
+    and any causal risk paths.
+
+    Args:
+        company_name: Competitor name as stored in the KG (e.g. 'Capgemini').
+
+    Returns:
+        Dict with kg_nodes, kg_edges, threat_level (from KG edge),
+        shared_entities_with_talan, causal_risk_paths.
+    """
+    try:
+        from app.services.market_analysis.world_model import WorldModel
+        import re as _re
+
+        def _slugify(name: str) -> str:
+            return _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+        wm = WorldModel()
+        if not wm.is_available():
+            return {"error": "Knowledge Graph unavailable", "company": company_name}
+
+        slug = _slugify(company_name)
+
+        # Ego-graph around the competitor (1 hop)
+        snapshot = wm.get_snapshot(company_name, hops=1)
+
+        # COMPETES_WITH edge properties toward Talan
+        competes_edge = wm._run(
+            """
+            MATCH (c:Competitor {slug: $slug})-[r:COMPETES_WITH]->(t:Company {slug: 'talan'})
+            RETURN r.threat_level AS threat_level, r.threat_label AS threat_label,
+                   r.updated_at AS updated_at
+            """,
+            {"slug": slug},
+        )
+        edge_data = {}
+        if competes_edge:
+            rec = competes_edge[0]
+            edge_data = {
+                "threat_level": rec.get("threat_level"),
+                "threat_label": rec.get("threat_label"),
+                "last_updated": rec.get("updated_at"),
+            }
+
+        # Shared entities between this competitor and Talan
+        shared = wm._run(
+            """
+            MATCH (c {slug: $slug})-[]-(shared)-[]-(t:Company {slug: 'talan'})
+            WHERE c <> t
+            RETURN shared.name AS name, labels(shared)[0] AS type
+            LIMIT 10
+            """,
+            {"slug": slug},
+        )
+        shared_entities = [
+            {"name": r.get("name"), "type": r.get("type")}
+            for r in shared
+        ]
+
+        # Causal risk paths: competitor → ... → Talan
+        risk_paths = wm.find_hidden_risks(target="Talan", max_hops=3)
+        relevant_paths = [
+            p for p in risk_paths
+            if company_name.lower() in (p.get("source", "") or "").lower()
+        ]
+
+        return {
+            "company":          company_name,
+            "kg_nodes":         snapshot.get("nodes", [])[:15],
+            "kg_edges":         snapshot.get("edges", [])[:20],
+            "kg_node_count":    snapshot.get("total_nodes", 0),
+            "competes_with_talan": edge_data,
+            "shared_entities_with_talan": shared_entities,
+            "causal_risk_paths_to_talan": relevant_paths[:5],
+        }
+    except Exception as exc:
+        return {"company": company_name, "error": str(exc)}

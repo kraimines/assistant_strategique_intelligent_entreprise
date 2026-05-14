@@ -1,28 +1,37 @@
-"""GNN Predictor Module — Heterogeneous Temporal Graph Neural Network.
+"""GNN Predictor — TGAT (Temporal Graph Attention Network).
 
-Architecture: Heterogeneous Temporal GNN using PyTorch Geometric (PyG).
+Architecture (ported from train_tgat.py):
+  1. Time2Vec encoder    : scalar t → 33-d sinusoidal embedding (learnable freq/phase)
+  2. 2 × TSAT layers    : Temporal Self-Attention over K most-recent temporal neighbours
+  3. Link prediction MLP : concat(z_src, z_dst) → sigmoid score
 
-Model: HeteroGATConv + Temporal Encoding → Impact Regression
-- Node feature dimension: 384 (sentence-transformer embedding) + 4 financial features = 388
-- Edge features: [impact_score, confidence, time_delta_hours]
-- Tasks:
-    1. Node regression  — predicted future impact on a company
-    2. Link prediction  — will a new causal relation appear?
-    3. Graph-level      — systemic risk score
+Checkpoint: checkpoints/tgat_best.pt  (AUC 0.9227, AP 0.9600, F1 0.9532)
 
-Training: on historical data extracted from Neo4j (2020-2026 window).
-Inference: called after each KG update.
+Inference workflow:
+  1. LiveGraphAdapter converts a KG snapshot (from Neo4j / orchestrator) into TGAT tensors:
+       - x [N, 396]  — one-hot type + centrality + 384-d embedding slot
+       - src/dst      — edge indices
+       - t            — timestamps normalised to [0, 1] (days since 2021-01-01 / 1461)
+  2. All edges are fed to TemporalNeighborStore to build temporal context.
+  3. TGAT scores each IMPACTS-type edge: P(causal) ∈ [0, 1].
+  4. Edge scores are aggregated per entity:
+       - predicted_impact ∈ [-1, 1]  (signed by edge impact_direction)
+       - systemic_risk_score         (mean of all link scores)
+  5. Returns GNNInferenceResult — same schema as before; orchestrator unchanged.
 
-PyG is an optional dependency — if not installed the module gracefully
-falls back to a heuristic rule-based predictor so the pipeline never crashes.
+Feature layout (must match training, see gnn_causal_dataset/metadata.json):
+  [0:10]   one-hot node type  (Company=0 … Event=9)
+  [10]     in-degree centrality normalised
+  [11]     impact / risk score normalised
+  [12:396] 384-d Gaussian cluster embedding (zeros at inference — temporal attention
+           patterns learned during training dominate over raw feature values)
 """
 from __future__ import annotations
 
-import json
 import logging
 import math
-import os
-from datetime import datetime, timedelta
+from collections import defaultdict, deque
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -30,631 +39,1166 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# ── Optional PyTorch Geometric import ─────────────────────────────────────────
-
 try:
     import torch
     import torch.nn as nn
-    import torch.nn.functional as F
-    from torch_geometric.data import HeteroData
-    from torch_geometric.nn import HeteroConv, GATConv, Linear, global_mean_pool
-    from torch_geometric.utils import add_self_loops
-
-    _PYG_AVAILABLE = True
-    logger.info("GNN: PyTorch Geometric available — using neural predictor")
+    _TORCH_AVAILABLE = True
+    logger.info("GNN: PyTorch available — using TGAT predictor")
 except ImportError:
-    _PYG_AVAILABLE = False
-    logger.warning(
-        "GNN: PyTorch Geometric not installed — falling back to heuristic predictor. "
-        "Install with: pip install torch torch-geometric"
-    )
+    _TORCH_AVAILABLE = False
+    logger.warning("GNN: PyTorch not installed — GNNPredictor unavailable.")
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+# ── Paths & hyper-parameters (must match training) ────────────────────────────
 
-NODE_FEATURE_DIM = 392          # 384 LLM embedding + 4 financial + 4 structural
-EDGE_FEATURE_DIM = 3            # impact_score, confidence, time_delta_hours (normalised)
-HIDDEN_DIM = 128
-NUM_HEADS = 4
-NUM_LAYERS = 2
-DROPOUT = 0.2
-MODEL_PATH = Path(os.getenv("GNN_MODEL_PATH", "./gnn_model.pt"))
+HERE      = Path(__file__).parent.resolve()
+CKPT_PATH = HERE / "checkpoints" / "tgat_best.pt"
 
-NODE_TYPES = ["Company", "Sector", "Country", "Event", "MacroIndicator"]
-EDGE_TYPES = [
-    ("Company", "CAUSES_IMPACT_ON", "Company"),
-    ("Event", "CAUSES_IMPACT_ON", "Company"),
-    ("Country", "CAUSES_IMPACT_ON", "Sector"),
-    ("MacroIndicator", "CAUSES_IMPACT_ON", "Company"),
-    ("Company", "BELONGS_TO_SECTOR", "Sector"),
-    ("Company", "COMPETES_WITH", "Company"),
-    ("Company", "SUPPLY_CHAIN_LINK", "Company"),
+TIME_DIM    = 32
+HIDDEN_DIM  = 128
+N_HEADS     = 4
+N_NEIGHBORS = 20
+FEAT_DIM    = 396   # from metadata.json — fixed by the trained checkpoint weights
+
+_TOTAL_DAYS = (datetime(2025, 1, 1) - datetime(2021, 1, 1)).days   # 1461
+_START_DATE = datetime(2021, 1, 1, tzinfo=timezone.utc)
+
+# Training node types (order = one-hot index, must match generator)
+_TRAIN_NODE_TYPES = [
+    "Company", "BusinessUnit", "Sector", "Geography",
+    "Client", "Project", "Competitor", "Regulation",
+    "MacroIndicator", "Event",
 ]
+_TYPE_INDEX = {t: i for i, t in enumerate(_TRAIN_NODE_TYPES)}
+
+# Neo4j label → training node type
+_LABEL_MAP: Dict[str, str] = {
+    "Company":       "Company",
+    "Competitor":    "Competitor",
+    "Sector":        "Sector",
+    "Country":       "Geography",
+    "Event":         "Event",
+    "MacroIndicator":"MacroIndicator",
+    "Regulation":    "Regulation",
+    "Person":        "Company",
+    "Technology":    "BusinessUnit",
+    "MarketTrend":   "Sector",
+    "News":          "Event",
+}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# A. Neural GNN (used when PyG is available)
+# §1  TGAT MODEL (exact port from train_tgat.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
-if _PYG_AVAILABLE:
+if _TORCH_AVAILABLE:
 
-    class TemporalEncoding(nn.Module):
-        """Sinusoidal temporal encoding for edge timestamps."""
+    class TimeEncoder(nn.Module):
+        """Time2Vec: φ(t) = [t, sin(w₁·t+b₁), …, sin(w_d·t+b_d)]  (learnable)."""
 
-        def __init__(self, dim: int = 32):
+        def __init__(self, dim: int = TIME_DIM):
             super().__init__()
-            self.dim = dim
-            self.w = nn.Linear(1, dim)
+            self.w = nn.Parameter(torch.randn(dim) * 0.1)
+            self.b = nn.Parameter(torch.zeros(dim))
 
         def forward(self, t: "torch.Tensor") -> "torch.Tensor":
-            # t: [E, 1] normalised time delta (0=now, 1=1 year ago)
-            freq = torch.arange(0, self.dim // 2, device=t.device).float()
-            freq = 1.0 / (10000 ** (2 * freq / self.dim))
-            enc = t * freq.unsqueeze(0)
-            return torch.cat([enc.sin(), enc.cos()], dim=-1)
+            t = t.unsqueeze(-1)
+            return torch.cat([t, torch.sin(t * self.w + self.b)], dim=-1)
 
-    class HeteroTemporalGNN(nn.Module):
-        """Heterogeneous Temporal GNN for market impact prediction.
+        @property
+        def out_dim(self) -> int:
+            return int(self.w.shape[0]) + 1
 
-        Layers:
-            1. Per-node-type linear projection (→ HIDDEN_DIM)
-            2. N × HeteroGATConv with temporal edge features
-            3. Per-node-type MLP head
-        Tasks:
-            - impact_regression  : predict future impact score for each Company node
-            - link_prediction    : score of new CAUSES_IMPACT_ON links
-            - graph_risk         : global systemic risk (0–1)
+
+    class TSATLayer(nn.Module):
+        """
+        Temporal Self-Attention layer.
+
+        For node v with feature h_v at query time t:
+          Q = Linear(cat(h_v,    φ(0)))
+          K = Linear(cat(h_nbrs, φ(t − t_nbrs)))
+          V = same
+          out = LayerNorm(FF(cat(MHA(Q,K,V), h_v)))
         """
 
-        def __init__(
-            self,
-            in_channels: int = NODE_FEATURE_DIM,
-            hidden: int = HIDDEN_DIM,
-            heads: int = NUM_HEADS,
-            num_layers: int = NUM_LAYERS,
-            dropout: float = DROPOUT,
-        ):
+        def __init__(self, feat_dim: int, time_enc_dim: int, hidden: int, n_heads: int):
             super().__init__()
-            self.dropout = dropout
-
-            # Per-node-type input projections
-            self.projections = nn.ModuleDict({
-                ntype: Linear(in_channels, hidden)
-                for ntype in NODE_TYPES
-            })
-
-            # Temporal encoding for edge timestamps
-            self.temporal_enc = TemporalEncoding(dim=32)
-            temporal_dim = 32
-
-            # GNN layers
-            self.convs = nn.ModuleList()
-            for layer in range(num_layers):
-                in_ch = hidden if layer > 0 else hidden
-                conv_dict = {}
-                for src, rel, dst in EDGE_TYPES:
-                    conv_dict[(src, rel, dst)] = GATConv(
-                        (in_ch, in_ch),
-                        hidden // heads,
-                        heads=heads,
-                        add_self_loops=False,
-                        edge_dim=EDGE_FEATURE_DIM + temporal_dim,
-                        dropout=dropout,
-                        concat=True,
-                    )
-                self.convs.append(HeteroConv(conv_dict, aggr="sum"))
-
-            # Task heads
-            self.impact_head = nn.Sequential(
-                nn.Linear(hidden, hidden // 2),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden // 2, 1),
-                nn.Tanh(),  # output in [-1, 1]
-            )
-            self.link_head = nn.Sequential(
-                nn.Linear(hidden * 2, hidden),
-                nn.ReLU(),
-                nn.Linear(hidden, 1),
-                nn.Sigmoid(),
-            )
-            self.risk_head = nn.Sequential(
-                nn.Linear(hidden, hidden // 2),
-                nn.ReLU(),
-                nn.Linear(hidden // 2, 1),
-                nn.Sigmoid(),
-            )
-
-        def encode(self, data: "HeteroData") -> Dict[str, "torch.Tensor"]:
-            """Compute node embeddings through all GNN layers."""
-            # Initial projection
-            x_dict: Dict[str, torch.Tensor] = {}
-            for ntype in NODE_TYPES:
-                if ntype in data.node_types and hasattr(data[ntype], "x"):
-                    x_dict[ntype] = F.relu(self.projections[ntype](data[ntype].x))
-                else:
-                    # Placeholder if node type absent in this graph
-                    x_dict[ntype] = torch.zeros(1, HIDDEN_DIM)
-
-            # Build edge_attr_dict with temporal encoding
-            edge_attr_dict: Dict[Tuple, Optional[torch.Tensor]] = {}
-            for et in data.edge_types:
-                if et in data.edge_index_dict:
-                    if hasattr(data[et], "edge_attr") and data[et].edge_attr is not None:
-                        base_ea = data[et].edge_attr  # [E, 3]
-                        # Temporal component (first column = time_delta_norm)
-                        t_col = base_ea[:, 2:3]
-                        t_enc = self.temporal_enc(t_col)  # [E, 32]
-                        edge_attr_dict[et] = torch.cat([base_ea, t_enc], dim=-1)
-                    else:
-                        edge_attr_dict[et] = None
-
-            # GNN layers
-            for conv in self.convs:
-                x_dict = conv(x_dict, data.edge_index_dict, edge_attr_dict=edge_attr_dict)
-                x_dict = {k: F.relu(v) for k, v in x_dict.items()}
-                x_dict = {k: F.dropout(v, p=self.dropout, training=self.training)
-                          for k, v in x_dict.items()}
-            return x_dict
+            in_qkv      = feat_dim + time_enc_dim
+            self.q_proj = nn.Linear(in_qkv, hidden)
+            self.k_proj = nn.Linear(in_qkv, hidden)
+            self.v_proj = nn.Linear(in_qkv, hidden)
+            self.attn   = nn.MultiheadAttention(hidden, n_heads, batch_first=True, dropout=0.1)
+            self.ff     = nn.Sequential(nn.Linear(hidden + feat_dim, hidden), nn.GELU())
+            self.norm   = nn.LayerNorm(hidden)
+            self.no_nbr = nn.Linear(feat_dim, hidden)
 
         def forward(
             self,
-            data: "HeteroData",
-        ) -> Dict[str, "torch.Tensor"]:
-            x_dict = self.encode(data)
-            company_emb = x_dict.get("Company", torch.zeros(1, HIDDEN_DIM))
-
-            # Task 1: Impact regression per Company node
-            impact = self.impact_head(company_emb)
-
-            # Task 3: Systemic risk from mean pooling
-            all_embs = torch.cat(list(x_dict.values()), dim=0)
-            pool = all_embs.mean(dim=0, keepdim=True)
-            risk = self.risk_head(pool)
-
-            return {"impact": impact, "risk": risk}
-
-        def predict_link(
-            self, src_emb: "torch.Tensor", dst_emb: "torch.Tensor"
+            h_v:    "torch.Tensor",
+            h_nbrs: List["torch.Tensor"],
+            t_v:    "torch.Tensor",
+            t_nbrs: List["torch.Tensor"],
+            time_enc: "TimeEncoder",
         ) -> "torch.Tensor":
-            """Score a candidate CAUSES_IMPACT_ON edge."""
-            return self.link_head(torch.cat([src_emb, dst_emb], dim=-1))
+            B   = h_v.size(0)
+            t0  = time_enc(torch.zeros(1, device=h_v.device))
+            out = []
+            for i in range(B):
+                nbrs = h_nbrs[i]
+                if nbrs.numel() == 0 or nbrs.size(0) == 0:
+                    out.append(self.norm(self.no_nbr(h_v[i])))
+                    continue
+                nts       = t_nbrs[i].to(h_v.device)
+                dt        = (t_v[i] - nts).clamp(min=0)
+                t_nbr_enc = time_enc(dt)
+                t_v_enc   = t0.expand(1, -1)
+                q = self.q_proj(torch.cat([h_v[i].unsqueeze(0), t_v_enc], dim=-1))
+                kv_in = torch.cat([nbrs.to(h_v.device), t_nbr_enc], dim=-1)
+                k = self.k_proj(kv_in)
+                v = self.v_proj(kv_in)
+                attn_out, _ = self.attn(q.unsqueeze(0), k.unsqueeze(0), v.unsqueeze(0))
+                attn_out = attn_out.squeeze(0).squeeze(0)
+                merged = self.ff(torch.cat([attn_out, h_v[i]], dim=-1))
+                out.append(self.norm(merged))
+            return torch.stack(out, dim=0)
+
+
+    class TGAT(nn.Module):
+        """2-layer Temporal Graph Attention Network (stateless, no GRU memory)."""
+
+        def __init__(self, node_feat_dim: int = FEAT_DIM):
+            super().__init__()
+            self.time_enc  = TimeEncoder(TIME_DIM)
+            t_dim          = self.time_enc.out_dim
+            self.layer1    = TSATLayer(node_feat_dim, t_dim, HIDDEN_DIM, N_HEADS)
+            self.layer2    = TSATLayer(HIDDEN_DIM,    t_dim, HIDDEN_DIM, N_HEADS)
+            self.predictor = nn.Sequential(
+                nn.Linear(2 * HIDDEN_DIM, HIDDEN_DIM),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(HIDDEN_DIM, 1),
+            )
+
+        def embed_nodes(
+            self,
+            node_ids:  "torch.Tensor",
+            t_query:   "torch.Tensor",
+            x:         "torch.Tensor",
+            nbr_store: "TemporalNeighborStore",
+        ) -> "torch.Tensor":
+            B = node_ids.size(0)
+            nbr_ids_L2, nbr_ts_L2 = nbr_store.query(node_ids, t_query)
+
+            # Collect unique neighbours to embed in Layer 1
+            all_nbr_ids = (
+                torch.cat([n for n in nbr_ids_L2 if n.numel() > 0])
+                if any(n.numel() > 0 for n in nbr_ids_L2)
+                else torch.tensor([], dtype=torch.long)
+            )
+            all_nbr_t = (
+                torch.cat([t for t in nbr_ts_L2 if t.numel() > 0])
+                if any(t.numel() > 0 for t in nbr_ts_L2)
+                else torch.tensor([], dtype=torch.float)
+            )
+
+            nbr_embed: Dict[int, "torch.Tensor"] = {}
+            if all_nbr_ids.numel() > 0:
+                unique_nbrs, _ = torch.unique(all_nbr_ids, return_inverse=True)
+                nbr_t_map: Dict[int, float] = {}
+                for nid, nt in zip(all_nbr_ids.tolist(), all_nbr_t.tolist()):
+                    nbr_t_map[nid] = max(nbr_t_map.get(nid, 0.0), nt)
+                un_list = unique_nbrs.tolist()
+                un_t    = torch.tensor([nbr_t_map[nid] for nid in un_list])
+                nn_ids, nn_ts = nbr_store.query(unique_nbrs, un_t)
+                h_unique  = x[unique_nbrs]
+                nn_feats  = [
+                    x[ids] if ids.numel() > 0 else torch.zeros(0, x.size(1))
+                    for ids in nn_ids
+                ]
+                with torch.no_grad():
+                    h_unique = self.layer1(h_unique, nn_feats, un_t, nn_ts, self.time_enc)
+                for uid, h in zip(unique_nbrs.tolist(), h_unique):
+                    nbr_embed[uid] = h
+
+            # Project target node raw features → HIDDEN_DIM via Layer 1 (no-neighbour path)
+            h_target   = x[node_ids]
+            dummy_nbrs = [torch.zeros(0, x.size(1)) for _ in range(B)]
+            dummy_ts   = [torch.zeros(0) for _ in range(B)]
+            h_target   = self.layer1(h_target, dummy_nbrs, t_query, dummy_ts, self.time_enc)
+
+            # Layer 2: embed target using Layer-1 neighbour embeddings
+            nbr_h_L2 = []
+            for i in range(B):
+                ids = nbr_ids_L2[i]
+                if ids.numel() == 0:
+                    nbr_h_L2.append(torch.zeros(0, HIDDEN_DIM))
+                else:
+                    nbr_h_L2.append(
+                        torch.stack([
+                            nbr_embed.get(nid, torch.zeros(HIDDEN_DIM))
+                            for nid in ids.tolist()
+                        ])
+                    )
+            return self.layer2(h_target, nbr_h_L2, t_query, nbr_ts_L2, self.time_enc)
+
+        def predict(self, z_src: "torch.Tensor", z_dst: "torch.Tensor") -> "torch.Tensor":
+            return self.predictor(torch.cat([z_src, z_dst], dim=-1)).squeeze(-1)
+
+
+    class TemporalNeighborStore:
+        """Maintains a causal temporal adjacency list (only past events visible)."""
+
+        def __init__(self, max_nbrs: int = N_NEIGHBORS):
+            self.max_nbrs = max_nbrs
+            self._nbrs: Dict[int, List[Tuple[int, float]]] = defaultdict(list)
+
+        def add_edges(self, src: "torch.Tensor", dst: "torch.Tensor",
+                      t: "torch.Tensor") -> None:
+            for s, d, ti in zip(src.tolist(), dst.tolist(), t.tolist()):
+                self._nbrs[s].append((d, float(ti)))
+                self._nbrs[d].append((s, float(ti)))
+
+        def query(
+            self, node_ids: "torch.Tensor", t_now: "torch.Tensor"
+        ) -> Tuple[List["torch.Tensor"], List["torch.Tensor"]]:
+            out_ids, out_ts = [], []
+            for i, nid in enumerate(node_ids.tolist()):
+                cutoff = float(t_now[i].item())
+                pairs  = [(n, ti) for n, ti in self._nbrs[nid] if ti < cutoff]
+                pairs  = sorted(pairs, key=lambda p: p[1])[-self.max_nbrs:]
+                if pairs:
+                    out_ids.append(torch.tensor([p[0] for p in pairs], dtype=torch.long))
+                    out_ts.append(torch.tensor([p[1] for p in pairs], dtype=torch.float))
+                else:
+                    out_ids.append(torch.tensor([], dtype=torch.long))
+                    out_ts.append(torch.tensor([], dtype=torch.float))
+            return out_ids, out_ts
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# B. Graph Builder — converts Neo4j data into PyG HeteroData
+# §2  LIVE GRAPH ADAPTER
+#     Converts a KG snapshot dict (from Neo4j / orchestrator) into TGAT tensors.
 # ══════════════════════════════════════════════════════════════════════════════
 
-class GraphBuilder:
-    """Converts Neo4j query results into a PyG HeteroData object for inference."""
+class LiveGraphAdapter:
+    """
+    Converts a kg_snapshot dict (Neo4j ego-graph) into the tensors TGAT expects.
 
-    def __init__(self, embedding_model=None):
-        self._embedder = embedding_model  # sentence-transformers model or None
+    Feature vector (396-d, matches training layout):
+      [0:10]   one-hot node type
+      [10]     in-degree centrality normalised  (by max degree in snapshot)
+      [11]     outgoing impact score normalised (mean |impact_score| of edges)
+      [12:396] zeros  (training used Gaussian cluster embeddings; at inference
+               the temporal attention pattern dominates raw features)
 
-    def _text_embedding(self, text: str) -> List[float]:
-        """Return a 384-dim sentence embedding (or zeros if model unavailable)."""
-        if self._embedder is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-                self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
-            except Exception:
-                return [0.0] * 384
-        try:
-            vec = self._embedder.encode(text, show_progress_bar=False)
-            return vec.tolist()
-        except Exception:
-            return [0.0] * 384
+    Edge timestamps are normalised as:  days_since_2021 / 1461  ∈ [0, 1]
+    Missing timestamps default to "now".
+    """
 
-    def build_from_kg_snapshot(
+    _IMPACT_EDGE_TYPES = {
+        "IMPACTS", "CAUSES_IMPACT_ON", "INFLUENCES", "AFFECTS",
+        "AFFECTS_INDICATOR", "TRIGGERS_EVENT",
+    }
+
+    def build(
         self,
         snapshot: Dict[str, Any],
         price_data: Optional[Dict[str, Any]] = None,
-    ) -> Optional["HeteroData"]:
-        """Build a HeteroData from a KG ego-graph snapshot dict."""
-        if not _PYG_AVAILABLE:
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Returns a dict with keys:
+          x          : torch.Tensor [N, 396]
+          src        : torch.Tensor [E]  (int64)
+          dst        : torch.Tensor [E]  (int64)
+          t          : torch.Tensor [E]  (float32, normalised)
+          impacts_mask: torch.Tensor [E] (bool, True for IMPACTS-type edges)
+          edge_impact_dir: List[float]   (+1 / −1 per edge, from impact_direction)
+          edge_confidence: List[float]   per edge
+          node_names  : List[str]        name for each node index
+          node_types  : List[str]        training type for each node index
+        """
+        nodes = snapshot.get("nodes", [])
+        edges = snapshot.get("edges", [])
+        if not nodes:
             return None
-        if not snapshot.get("nodes"):
-            return None
 
-        data = HeteroData()
-        now = datetime.utcnow()
+        now_ts = self._ts_to_norm(datetime.now(timezone.utc).isoformat())
 
-        # Index nodes by (label, name)
-        node_indices: Dict[Tuple[str, str], int] = {}
-        node_features: Dict[str, List[List[float]]] = {nt: [] for nt in NODE_TYPES}
-        node_counts: Dict[str, int] = {nt: 0 for nt in NODE_TYPES}
+        # ── Build node index ──────────────────────────────────────────────────
+        node_id_to_idx: Dict[str, int] = {}
+        node_names:     List[str]      = []
+        node_type_names:List[str]      = []
 
-        for node in snapshot["nodes"]:
-            label = (node.get("labels") or ["Company"])[0]
-            name = node.get("name", "?")
-            if label not in NODE_TYPES:
-                label = "Company"
+        for node in nodes:
+            neo_id = str(node.get("id", node.get("name", "")))
+            if neo_id in node_id_to_idx:
+                continue
+            idx = len(node_names)
+            node_id_to_idx[neo_id] = idx
+            node_names.append(node.get("name", neo_id))
+            raw_label = (node.get("labels") or ["Company"])[0]
+            node_type_names.append(_LABEL_MAP.get(raw_label, "Company"))
 
-            # Build feature vector: [embedding(384) + financial(4) + structural(4)]
-            emb = self._text_embedding(name)
-            ticker = node.get("ticker", "")
-            prices = price_data.get(ticker, {}) if price_data and ticker else {}
-            fin_feats = [
-                prices.get("change_pct", 0.0),
-                min(math.log1p(prices.get("volume", 0)) / 20, 1.0),
-                prices.get("volatility_annualised_pct", 0.0) / 100,
-                min(prices.get("price", 0) / 1000, 1.0),
-            ]
-            structural_feats = [0.0] * 4   # degree features (filled in post)
-            feature_vec = emb + fin_feats + structural_feats
+        N = len(node_names)
 
-            node_idx = node_counts[label]
-            node_indices[(label, name)] = node_idx
-            node_features[label].append(feature_vec)
-            node_counts[label] += 1
+        # ── Compute degree centrality (for feature dim 10) ─────────────────────
+        in_degree: Dict[int, int] = defaultdict(int)
+        out_impact: Dict[int, List[float]] = defaultdict(list)
 
-        # Assign node feature tensors
-        for label in NODE_TYPES:
-            feats = node_features[label]
-            if feats:
-                data[label].x = torch.tensor(feats, dtype=torch.float32)
-            else:
-                data[label].x = torch.zeros((0, NODE_FEATURE_DIM), dtype=torch.float32)
+        for edge in edges:
+            src_id = str(edge.get("from", ""))
+            dst_id = str(edge.get("to",   ""))
+            if src_id in node_id_to_idx and dst_id in node_id_to_idx:
+                in_degree[node_id_to_idx[dst_id]] += 1
+                score = abs(float(edge.get("impact_score") or 0.0))
+                out_impact[node_id_to_idx[src_id]].append(score)
 
-        # Build edge tensors
-        edge_src: Dict[Tuple, List[int]] = {et: [] for et in EDGE_TYPES}
-        edge_dst: Dict[Tuple, List[int]] = {et: [] for et in EDGE_TYPES}
-        edge_attrs: Dict[Tuple, List[List[float]]] = {et: [] for et in EDGE_TYPES}
+        max_degree = max(in_degree.values(), default=1) or 1
 
-        for edge in snapshot["edges"]:
-            # Map node ids back to (label, name) — use index from snapshot
-            from_id = edge.get("from")
-            to_id = edge.get("to")
-            from_node = next(
-                (n for n in snapshot["nodes"] if n["id"] == from_id), None
-            )
-            to_node = next(
-                (n for n in snapshot["nodes"] if n["id"] == to_id), None
-            )
-            if not from_node or not to_node:
+        # ── Build feature matrix ───────────────────────────────────────────────
+        x = np.zeros((N, FEAT_DIM), dtype=np.float32)
+        for i, (_, ttype) in enumerate(zip(node_names, node_type_names)):
+            type_idx = _TYPE_INDEX.get(ttype, 0)
+            x[i, type_idx] = 1.0                                          # one-hot
+            x[i, 10] = in_degree.get(i, 0) / max_degree                  # centrality
+            scores = out_impact.get(i, [])
+            x[i, 11] = float(np.mean(scores)) if scores else 0.0          # impact norm
+            # Inject price data for companies if available
+            if price_data:
+                # find ticker from snapshot node
+                node_meta = next(
+                    (n for n in nodes
+                     if str(n.get("id", n.get("name", ""))) == list(node_id_to_idx.keys())[i]),
+                    {},
+                )
+                ticker = node_meta.get("ticker", "")
+                if ticker and ticker in price_data:
+                    pd = price_data[ticker]
+                    x[i, 12] = max(-1.0, min(1.0, pd.get("change_pct", 0.0) / 10.0))
+                    x[i, 13] = min(math.log1p(pd.get("volume", 0)) / 20, 1.0)
+
+        # ── Build edge tensors ─────────────────────────────────────────────────
+        srcs:           List[int]   = []
+        dsts:           List[int]   = []
+        ts:             List[float] = []
+        impacts_mask:   List[bool]  = []
+        edge_impact_dir:List[float] = []
+        edge_confidence:List[float] = []
+
+        for edge in edges:
+            src_id = str(edge.get("from", ""))
+            dst_id = str(edge.get("to",   ""))
+            if src_id not in node_id_to_idx or dst_id not in node_id_to_idx:
                 continue
 
-            from_label = (from_node.get("labels") or ["Company"])[0]
-            to_label = (to_node.get("labels") or ["Company"])[0]
-            if from_label not in NODE_TYPES:
-                from_label = "Company"
-            if to_label not in NODE_TYPES:
-                to_label = "Company"
+            srcs.append(node_id_to_idx[src_id])
+            dsts.append(node_id_to_idx[dst_id])
 
-            rel = edge.get("type", "CAUSES_IMPACT_ON")
-            et_key = (from_label, rel, to_label)
-
-            # Find matching declared edge type
-            matched_et = None
-            for et in EDGE_TYPES:
-                if et[0] == from_label and et[1] == rel and et[2] == to_label:
-                    matched_et = et
-                    break
-            if matched_et is None:
-                matched_et = (from_label, "CAUSES_IMPACT_ON", to_label)
-                if matched_et not in EDGE_TYPES:
-                    continue
-
-            src_idx = node_indices.get((from_label, from_node["name"]))
-            dst_idx = node_indices.get((to_label, to_node["name"]))
-            if src_idx is None or dst_idx is None:
-                continue
-
-            # Edge features: [impact_score, confidence, time_delta_norm]
-            impact_score = float(edge.get("impact_score") or 0.0)
-            confidence = float(edge.get("confidence") or 0.5)
             ts_str = edge.get("timestamp")
-            if ts_str:
-                try:
-                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    td = (now - ts.replace(tzinfo=None)).total_seconds() / (365 * 24 * 3600)
-                    time_delta = min(max(td, 0.0), 1.0)
-                except Exception:
-                    time_delta = 0.5
-            else:
-                time_delta = 0.5
+            ts.append(self._ts_to_norm(ts_str) if ts_str else now_ts)
 
-            edge_src[matched_et].append(src_idx)
-            edge_dst[matched_et].append(dst_idx)
-            edge_attrs[matched_et].append([impact_score, confidence, time_delta])
+            etype  = str(edge.get("type", ""))
+            impacts_mask.append(etype in self._IMPACT_EDGE_TYPES)
 
-        # Assign edge tensors
-        for et in EDGE_TYPES:
-            srcs = edge_src[et]
-            dsts = edge_dst[et]
-            if srcs:
-                src_t, dst_t = [et[0], et[2]]
-                data[et].edge_index = torch.tensor(
-                    [srcs, dsts], dtype=torch.long
-                )
-                data[et].edge_attr = torch.tensor(
-                    edge_attrs[et], dtype=torch.float32
-                )
+            direction = str(edge.get("impact_direction", "uncertain")).lower()
+            edge_impact_dir.append(-1.0 if direction == "negative" else 1.0)
+            edge_confidence.append(float(edge.get("confidence") or 0.5))
 
-        return data
+        if not srcs:
+            return None
+
+        if not _TORCH_AVAILABLE:
+            return None
+
+        return {
+            "x":              torch.tensor(x, dtype=torch.float32),
+            "src":            torch.tensor(srcs, dtype=torch.long),
+            "dst":            torch.tensor(dsts, dtype=torch.long),
+            "t":              torch.tensor(ts,   dtype=torch.float32),
+            "impacts_mask":   torch.tensor(impacts_mask, dtype=torch.bool),
+            "edge_impact_dir":edge_impact_dir,
+            "edge_confidence":edge_confidence,
+            "node_names":     node_names,
+            "node_types":     node_type_names,
+        }
+
+    @staticmethod
+    def _ts_to_norm(ts: str) -> float:
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+            days = (dt - _START_DATE).days
+            return float(np.clip(days / _TOTAL_DAYS, 0.0, 1.0))
+        except Exception:
+            return 1.0   # default: "now" (end of range)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# C. GNN Predictor — main interface
+# §3  GNN PREDICTOR — main interface
 # ══════════════════════════════════════════════════════════════════════════════
 
 class GNNPredictor:
-    """Production-ready GNN predictor.
+    """
+    TGAT-based market impact predictor.
 
-    If PyG is available and a trained model exists, runs neural inference.
-    Otherwise falls back to a rule-based heuristic that uses the KG edge weights.
+    Loads checkpoint/tgat_best.pt on first call.
+    Falls back to heuristic scoring if PyTorch is unavailable or the
+    snapshot has no scorable edges.
     """
 
     def __init__(self):
-        self._model: Optional["HeteroTemporalGNN"] = None
-        self._builder = GraphBuilder()
+        self._model: Optional["TGAT"] = None
+        self._adapter = LiveGraphAdapter()
+        self._trained  = CKPT_PATH.exists()
+        if not _TORCH_AVAILABLE:
+            logger.warning("GNN: PyTorch unavailable — heuristic fallback active")
 
-    def _load_or_init_model(self) -> Optional["HeteroTemporalGNN"]:
-        if not _PYG_AVAILABLE:
-            return None
-        if self._model is None:
-            model = HeteroTemporalGNN()
-            if MODEL_PATH.exists():
-                try:
-                    state = torch.load(str(MODEL_PATH), map_location="cpu")
-                    model.load_state_dict(state)
-                    logger.info("GNN: loaded model from %s", MODEL_PATH)
-                except Exception as e:
-                    logger.warning("GNN: could not load model — %s — using fresh weights", e)
-            else:
-                logger.info("GNN: no saved model — using random weights for inference")
-            model.eval()
-            self._model = model
-        return self._model
+    @property
+    def is_trained(self) -> bool:
+        return self._trained
 
-    def save_model(self) -> None:
-        """Persist model weights to disk."""
-        if self._model and _PYG_AVAILABLE:
-            torch.save(self._model.state_dict(), str(MODEL_PATH))
-            logger.info("GNN: model saved to %s", MODEL_PATH)
-
-    def train(
-        self,
-        training_snapshots: List[Tuple["HeteroData", float]],
-        epochs: int = 50,
-        lr: float = 1e-3,
-    ) -> Dict[str, List[float]]:
-        """Train the GNN on historical (graph, target_impact) pairs.
-
-        Args:
-            training_snapshots: List of (HeteroData, target_impact) tuples.
-                                 target_impact ∈ [-1, 1] for Talan's company node.
-            epochs: Number of training epochs.
-            lr:     Learning rate.
-
-        Returns:
-            Dict with 'train_losses' list.
-        """
-        if not _PYG_AVAILABLE:
-            logger.warning("GNN training skipped — PyG not available")
-            return {"train_losses": []}
-
-        model = self._load_or_init_model()
-        if model is None:
-            return {"train_losses": []}
-
-        model.train()
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
-        criterion = nn.MSELoss()
-        losses = []
-
-        logger.info("GNN: starting training — %d samples, %d epochs", len(training_snapshots), epochs)
-        for epoch in range(epochs):
-            epoch_loss = 0.0
-            for data, target in training_snapshots:
-                optimizer.zero_grad()
-                out = model(data)
-                # Target is impact on Talan (index 0 of Company nodes, by convention)
-                pred = out["impact"][0] if out["impact"].numel() > 0 else torch.tensor([0.0])
-                tgt = torch.tensor([[target]], dtype=torch.float32)
-                loss = criterion(pred, tgt)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
-                epoch_loss += loss.item()
-            scheduler.step()
-            avg = epoch_loss / max(len(training_snapshots), 1)
-            losses.append(avg)
-            if (epoch + 1) % 10 == 0:
-                logger.info("GNN epoch %d/%d — loss=%.4f", epoch + 1, epochs, avg)
-
+    def _load_model(self) -> "TGAT":
+        if self._model is not None:
+            return self._model
+        if not _TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch not installed.")
+        model = TGAT(node_feat_dim=FEAT_DIM)
+        if CKPT_PATH.exists():
+            state = torch.load(str(CKPT_PATH), map_location="cpu", weights_only=True)
+            model.load_state_dict(state)
+            logger.info("GNN: loaded TGAT checkpoint from %s", CKPT_PATH)
+        else:
+            logger.warning(
+                "GNN: %s not found — running with random weights. "
+                "Train first with: python train_tgat.py", CKPT_PATH
+            )
         model.eval()
         self._model = model
-        self.save_model()
-        return {"train_losses": losses}
+        return model
 
     def predict(
         self,
         kg_snapshot: Dict[str, Any],
         price_data: Optional[Dict[str, Any]] = None,
         trigger_event: str = "unknown",
-        company_names: Optional[List[str]] = None,
-    ) -> "GNNInferenceResult":
-        """Run inference. Returns GNNInferenceResult."""
-        from app.schemas.market_analysis_schemas import GNNInferenceResult, GNNPrediction, AlertLevel
+    ) -> Any:
+        """
+        Run TGAT inference on a KG snapshot.
 
-        now = datetime.utcnow()
+        Raises ValueError if the snapshot is empty.
+        Falls back to heuristic scoring if TGAT cannot run.
+        """
         nodes = kg_snapshot.get("nodes", [])
-        edges = kg_snapshot.get("edges", [])
+        if not nodes:
+            raise ValueError("KG snapshot is empty — cannot run GNN inference.")
 
-        if _PYG_AVAILABLE:
-            result = self._neural_predict(
-                kg_snapshot, price_data, trigger_event, company_names
-            )
-        else:
-            result = self._heuristic_predict(
-                nodes, edges, trigger_event, company_names
-            )
-        return result
+        # Try TGAT inference
+        try:
+            result = self._tgat_predict(kg_snapshot, price_data, trigger_event)
+            if result is not None:
+                return result
+        except Exception as exc:
+            logger.warning("GNN: TGAT inference failed (%s) — using heuristic fallback", exc)
 
-    def _neural_predict(
+        # Heuristic fallback
+        return self._heuristic_predict(kg_snapshot, trigger_event)
+
+    # ── TGAT inference ────────────────────────────────────────────────────────
+
+    def _tgat_predict(
         self,
         snapshot: Dict[str, Any],
         price_data: Optional[Dict[str, Any]],
         trigger_event: str,
-        company_names: Optional[List[str]],
-    ) -> "GNNInferenceResult":
+    ) -> Optional[Any]:
         from app.schemas.market_analysis_schemas import GNNInferenceResult, GNNPrediction
 
-        model = self._load_or_init_model()
-        if model is None:
-            return self._heuristic_predict(
-                snapshot.get("nodes", []), snapshot.get("edges", []),
-                trigger_event, company_names
-            )
+        tensors = self._adapter.build(snapshot, price_data)
+        if tensors is None:
+            return None
 
-        data = self._builder.build_from_kg_snapshot(snapshot, price_data)
-        if data is None:
-            return self._heuristic_predict(
-                snapshot.get("nodes", []), snapshot.get("edges", []),
-                trigger_event, company_names
-            )
+        model = self._load_model()
 
-        with (torch.no_grad() if _PYG_AVAILABLE else _DummyContext()):
-            out = model(data)
+        x            = tensors["x"]
+        src          = tensors["src"]
+        dst          = tensors["dst"]
+        t            = tensors["t"]
+        impacts_mask = tensors["impacts_mask"]
+        dir_signs    = tensors["edge_impact_dir"]
+        confidences  = tensors["edge_confidence"]
+        node_names   = tensors["node_names"]
+        node_types   = tensors["node_types"]
 
-        company_nodes = [
-            n for n in snapshot["nodes"]
-            if (n.get("labels") or ["?"])[0] == "Company"
-        ]
+        # Build temporal neighbour store from all edges (causal temporal context)
+        nbr_store = TemporalNeighborStore()
+        nbr_store.add_edges(src, dst, t)
+
+        # Score IMPACTS edges
+        imp_idx = impacts_mask.nonzero(as_tuple=True)[0]
+        if imp_idx.numel() == 0:
+            logger.info("GNN: no IMPACTS edges in snapshot — heuristic fallback")
+            return None
+
+        imp_src = src[imp_idx]
+        imp_dst = dst[imp_idx]
+        imp_t   = t[imp_idx]
+        imp_dir = [dir_signs[i] for i in imp_idx.tolist()]
+        imp_conf= [confidences[i] for i in imp_idx.tolist()]
+
+        with torch.no_grad():
+            z_src  = model.embed_nodes(imp_src, imp_t, x, nbr_store)
+            z_dst  = model.embed_nodes(imp_dst, imp_t, x, nbr_store)
+            logits = model.predict(z_src, z_dst)
+            scores = torch.sigmoid(logits).cpu().numpy()   # [E_imp], ∈ [0, 1]
+
+        logger.info(
+            "GNN TGAT [%s]: %d nodes, %d impact edges, trigger='%s' | "
+            "score μ=%.3f σ=%.3f",
+            "trained" if self._trained else "random",
+            len(node_names), imp_idx.numel(), trigger_event[:60],
+            float(scores.mean()), float(scores.std()),
+        )
+
+        # ── Per-entity impact aggregation ─────────────────────────────────────
+        # score ∈ [0,1] → signed_score ∈ [-1, 1] then map to [-1, 1] impact
+        entity_scores: Dict[int, List[float]] = defaultdict(list)
+        entity_conf:   Dict[int, List[float]] = defaultdict(list)
+
+        for dst_i, score, sign, conf in zip(
+            imp_dst.tolist(), scores.tolist(), imp_dir, imp_conf
+        ):
+            signed = (2 * score - 1) * sign    # map [0,1] → [-1,1], apply direction
+            entity_scores[dst_i].append(signed)
+            entity_conf[dst_i].append(conf)
+
+        systemic_risk = float(np.clip(scores.mean() * 1.2, 0.0, 1.0))
 
         predictions = []
-        impact_tensor = out.get("impact", torch.zeros(len(company_nodes), 1))
-        risk_score = float(out.get("risk", torch.tensor([[0.5]]))[0, 0])
+        for idx, (name, ntype) in enumerate(zip(node_names, node_types)):
+            esc = entity_scores.get(idx, [])
+            if not esc:
+                continue
+            conf_weights = entity_conf.get(idx, [1.0] * len(esc))
+            w = np.array(conf_weights)
+            impact = float(np.clip(np.average(esc, weights=w), -1.0, 1.0))
+            mean_conf = float(np.mean(conf_weights))
+            hop  = _compute_hops(snapshot, name, trigger_event)
+            hidden = abs(impact) > 0.3 and hop > 1 and name != "Talan"
 
-        for i, node in enumerate(company_nodes):
-            score = float(impact_tensor[i, 0]) if i < len(impact_tensor) else 0.0
-            hop = _compute_hops(snapshot, node["name"], trigger_event)
-            is_talan = node["name"] == "Talan"
-            # Mark as hidden risk if score is significant and hops > 1
-            hidden = abs(score) > 0.3 and hop > 1 and not is_talan
-            pred = GNNPrediction(
-                entity_name=node["name"],
-                entity_type="company",
-                predicted_impact=round(score, 4),
-                confidence=round(max(0.4, 1.0 - hop * 0.15), 3),
-                propagation_hops=hop,
-                hidden_risk=hidden,
-            )
-            predictions.append(pred)
+            from app.schemas.market_analysis_schemas import EntityType as ET
+            etype_map = {
+                "Company": ET.COMPANY, "Competitor": ET.COMPETITOR,
+                "Sector": ET.SECTOR, "Geography": ET.COUNTRY,
+                "MacroIndicator": ET.MACRO_INDICATOR, "Event": ET.EVENT,
+                "Regulation": ET.REGULATION, "BusinessUnit": ET.COMPANY,
+                "Client": ET.COMPANY, "Project": ET.COMPANY,
+            }
+            predictions.append(GNNPrediction(
+                entity_name      = name,
+                entity_type      = etype_map.get(ntype, ET.COMPANY),
+                predicted_impact = round(impact, 4),
+                confidence       = round(min(mean_conf, 1.0), 3),
+                propagation_hops = hop,
+                hidden_risk      = hidden,
+            ))
 
-        talan_pred = next((p for p in predictions if p.entity_name == "Talan"), None)
-        hidden_risks = [p for p in predictions if p.hidden_risk and p.predicted_impact < -0.2]
-        hidden_risks.sort(key=lambda p: p.predicted_impact)
-
-        from app.schemas.market_analysis_schemas import GNNInferenceResult
-        return GNNInferenceResult(
-            run_at=datetime.utcnow(),
-            trigger_event=trigger_event,
-            predictions=predictions,
-            talan_prediction=talan_pred,
-            systemic_risk_score=round(risk_score, 4),
-            top_hidden_risks=hidden_risks[:5],
+        talan_pred  = next((p for p in predictions if p.entity_name == "Talan"), None)
+        hidden_risks = sorted(
+            [p for p in predictions if p.hidden_risk and p.predicted_impact < -0.2],
+            key=lambda p: p.predicted_impact,
         )
+        prop_paths = _extract_propagation_paths(
+            snapshot, predictions,
+            entity_title_map=snapshot.get("entity_title_map"),
+        )
+
+        logger.info(
+            "GNN result: talan=%s systemic=%.3f predictions=%d hidden=%d paths=%d",
+            f"{talan_pred.predicted_impact:+.3f}" if talan_pred else "N/A",
+            systemic_risk, len(predictions), len(hidden_risks), len(prop_paths),
+        )
+
+        return GNNInferenceResult(
+            run_at               = datetime.now(timezone.utc),
+            trigger_event        = trigger_event,
+            predictions          = predictions,
+            talan_prediction     = talan_pred,
+            systemic_risk_score  = round(systemic_risk, 4),
+            top_hidden_risks     = hidden_risks[:5],
+            propagation_paths    = prop_paths,
+            inference_mode       = "tgat_trained" if self._trained else "tgat_random",
+        )
+
+    # ── Heuristic fallback ────────────────────────────────────────────────────
 
     def _heuristic_predict(
         self,
-        nodes: List[Dict],
-        edges: List[Dict],
+        snapshot: Dict[str, Any],
         trigger_event: str,
-        company_names: Optional[List[str]],
-    ) -> "GNNInferenceResult":
-        """Rule-based fallback when PyG is unavailable.
-
-        Propagates impact scores through the graph using a weighted BFS.
-        """
-        from app.schemas.market_analysis_schemas import GNNInferenceResult, GNNPrediction
-
-        # Build adjacency: {to_name: [(from_name, impact_score, confidence)]}
-        adj: Dict[str, List[Tuple]] = {}
-        name_map = {n["id"]: n["name"] for n in nodes}
-        for edge in edges:
-            to_name = name_map.get(edge.get("to"), "?")
-            from_name = name_map.get(edge.get("from"), "?")
-            score = float(edge.get("impact_score") or 0.0)
-            conf = float(edge.get("confidence") or 0.5)
-            adj.setdefault(to_name, []).append((from_name, score, conf))
-
-        # BFS propagation for each company node
-        company_nodes = [n for n in nodes if (n.get("labels") or ["?"])[0] == "Company"]
-        predictions = []
-        for node in company_nodes:
-            name = node["name"]
-            direct = adj.get(name, [])
-            score = sum(s * c for _, s, c in direct) / max(len(direct), 1)
-            hop = 1 if direct else 0
-            # Second-order
-            second_order = []
-            for dep_name, _, _ in direct:
-                for _, s2, c2 in adj.get(dep_name, []):
-                    second_order.append(s2 * c2 * 0.5)
-            if second_order:
-                score += sum(second_order) / len(second_order)
-                hop = 2
-            score = max(-1.0, min(1.0, score))
-            hidden = abs(score) > 0.3 and hop == 2 and name != "Talan"
-            predictions.append(GNNPrediction(
-                entity_name=name,
-                entity_type="company",
-                predicted_impact=round(score, 4),
-                confidence=round(0.6 - hop * 0.1, 3),
-                propagation_hops=hop,
-                hidden_risk=hidden,
-            ))
-
-        predictions.sort(key=lambda p: p.predicted_impact)
-        talan = next((p for p in predictions if p.entity_name == "Talan"), None)
-        systemic = abs(sum(p.predicted_impact for p in predictions)) / max(len(predictions), 1)
-        hidden_risks = [p for p in predictions if p.hidden_risk][:5]
-
-        return GNNInferenceResult(
-            run_at=datetime.utcnow(),
-            trigger_event=trigger_event,
-            predictions=predictions,
-            talan_prediction=talan,
-            systemic_risk_score=round(min(systemic, 1.0), 4),
-            top_hidden_risks=hidden_risks,
+    ) -> Any:
+        """Rule-based scoring used when TGAT cannot run (no edges, no torch…)."""
+        from app.schemas.market_analysis_schemas import (
+            GNNInferenceResult, GNNPrediction, EntityType as ET,
         )
 
+        nodes = snapshot.get("nodes", [])
+        edges = snapshot.get("edges", [])
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+        # Aggregate impact scores from edge metadata
+        entity_impact: Dict[str, List[float]] = defaultdict(list)
+        entity_conf:   Dict[str, List[float]] = defaultdict(list)
+        name_map: Dict[str, str] = {
+            n.get("id", n.get("name", "")): n.get("name", "?") for n in nodes
+        }
+
+        for edge in edges:
+            to_name = name_map.get(str(edge.get("to", "")), "")
+            if not to_name:
+                continue
+            score = float(edge.get("impact_score") or 0.0)
+            direction = str(edge.get("impact_direction", "uncertain")).lower()
+            signed = score if direction != "negative" else -abs(score)
+            entity_impact[to_name].append(signed)
+            entity_conf[to_name].append(float(edge.get("confidence") or 0.5))
+
+        predictions = []
+        for node in nodes:
+            name = node.get("name", "?")
+            raw_label = (node.get("labels") or ["Company"])[0]
+            etype_map = {
+                "Company": ET.COMPANY, "Competitor": ET.COMPETITOR,
+                "Sector": ET.SECTOR, "Country": ET.COUNTRY,
+                "MacroIndicator": ET.MACRO_INDICATOR, "Event": ET.EVENT,
+                "Regulation": ET.REGULATION,
+            }
+            etype = etype_map.get(raw_label, ET.COMPANY)
+            scores = entity_impact.get(name, [])
+            if not scores:
+                continue
+            impact = float(np.clip(np.mean(scores), -1.0, 1.0))
+            conf   = float(np.mean(entity_conf.get(name, [0.5])))
+            hop    = _compute_hops(snapshot, name, trigger_event)
+            hidden = abs(impact) > 0.3 and hop > 1 and name != "Talan"
+            predictions.append(GNNPrediction(
+                entity_name      = name,
+                entity_type      = etype,
+                predicted_impact = round(impact, 4),
+                confidence       = round(conf, 3),
+                propagation_hops = hop,
+                hidden_risk      = hidden,
+            ))
+
+        all_scores = [abs(p.predicted_impact) for p in predictions]
+        systemic   = float(np.clip(np.mean(all_scores) if all_scores else 0.3, 0.0, 1.0))
+        talan_pred = next((p for p in predictions if p.entity_name == "Talan"), None)
+        hidden_risks = sorted(
+            [p for p in predictions if p.hidden_risk and p.predicted_impact < -0.2],
+            key=lambda p: p.predicted_impact,
+        )
+        prop_paths = _extract_propagation_paths(
+            snapshot, predictions,
+            entity_title_map=snapshot.get("entity_title_map"),
+        )
+
+        logger.info("GNN heuristic: predictions=%d hidden=%d paths=%d",
+                    len(predictions), len(hidden_risks), len(prop_paths))
+
+        return GNNInferenceResult(
+            run_at              = datetime.utcnow(),
+            trigger_event       = trigger_event,
+            predictions         = predictions,
+            talan_prediction    = talan_pred,
+            systemic_risk_score = round(systemic, 4),
+            top_hidden_risks    = hidden_risks[:5],
+            propagation_paths   = prop_paths,
+            inference_mode      = "heuristic",
+        )
+
+    # ── v3 inference (post-processing of TGAT/heuristic output) ───────────────
+
+    def predict_v3(
+        self,
+        kg_snapshot: Dict[str, Any],
+        price_data: Optional[Dict[str, Any]] = None,
+        trigger_event: str = "unknown",
+        *,
+        edge_policy=None,
+        path_ranker=None,
+        explanation_generator=None,
+        top_k_paths: int = 10,
+    ) -> Any:
+        """Run TGAT/heuristic prediction, then apply v3 ranking + filtering.
+
+        This is a non-invasive wrapper: the underlying TGAT inference is the
+        same as ``predict()``. After the raw ``GNNInferenceResult`` is
+        produced, we:
+
+          1. gate edges by EdgeTypePolicy (drops α=0 paths),
+          2. score every PropagationPath through the PathRanker
+             (W(p) = T̂·ρ·τ̄·spec·coh·conf̄, §3(h)),
+          3. filter paths via §3(j) thresholds,
+          4. attach a structured PropagationExplanation per kept path,
+          5. populate the new schema fields on PropagationPath.
+
+        Edge gating is also applied to the snapshot view that the path
+        ranker sees, so blocked relations cannot resurface in `_filter`.
+        """
+        # 1. Apply edge gating to the snapshot's edges in-place — this means
+        # the heuristic / TGAT path extractors no longer see α=0 edges.
+        if edge_policy is not None:
+            self._annotate_edge_labels(kg_snapshot)
+            kg_snapshot["edges"] = edge_policy.gate_edges(kg_snapshot.get("edges") or [])
+
+        result = self.predict(kg_snapshot, price_data, trigger_event)
+        if path_ranker is None or not getattr(result, "propagation_paths", None):
+            return result
+
+        # 2-3. Score + rank + filter paths
+        path_dicts = []
+        for p in result.propagation_paths:
+            path_dict = p.model_dump() if hasattr(p, "model_dump") else p.dict()
+            self._annotate_step_edges(path_dict, kg_snapshot)
+            path_dicts.append(path_dict)
+
+        kept, rejected = path_ranker.rank(path_dicts, top_k=top_k_paths)
+
+        # 4-5. Rebuild PropagationPath objects with v3 fields populated
+        from app.schemas.market_analysis_schemas import (
+            PropagationExplanation, PropagationPath, PropagationStep,
+        )
+
+        new_paths: List[PropagationPath] = []
+        for s in kept:
+            steps = [
+                PropagationStep(
+                    node_name=step.get("node_name", ""),
+                    node_type=step.get("node_type", ""),
+                    relation_type=step.get("relation_type", ""),
+                    reason=step.get("reason", ""),
+                    impact_score=float(step.get("impact_score") or 0.0),
+                    time_horizon=step.get("time_horizon") or "short_term",
+                    relation_strength=float(step.get("relation_strength") or 0.5),
+                    business_relevance=float(step.get("business_relevance") or s.plausibility),
+                    freshness_score=float(step.get("freshness_score") or s.path_freshness),
+                    edge_confidence=float(step.get("edge_confidence") or step.get("confidence") or s.avg_edge_confidence),
+                    is_generic_hub_step=bool(step.get("is_generic_hub_step", False)),
+                )
+                for step in (s.path.get("steps") or [])
+            ]
+            explanation = None
+            if explanation_generator is not None:
+                draft = explanation_generator.explain(s)
+                explanation = PropagationExplanation(**draft.as_dict())
+
+            new_paths.append(PropagationPath(
+                source_name=s.path.get("source_name", ""),
+                source_type=s.path.get("source_type", ""),
+                steps=steps,
+                chain_score=float(s.path.get("chain_score") or 0.0),
+                chain_conf=float(s.path.get("chain_conf") or 0.0),
+                hops=int(s.path.get("hops") or len(steps)),
+                time_horizon_label=s.path.get("time_horizon_label", ""),
+                narrative=s.path.get("narrative", ""),
+                event_title=s.path.get("event_title", ""),
+                key_impact=s.path.get("key_impact", ""),
+                source_evidence=s.path.get("source_evidence", ""),
+                business_plausibility=s.plausibility,
+                causal_coherence=s.causal_coherence,
+                path_specificity=s.path_specificity,
+                weighted_score=s.weighted_score,
+                impact_probability=s.impact_probability,
+                estimated_business_impact_pct=s.estimated_business_impact_pct,
+                confidence=s.confidence,
+                uncertainty=s.uncertainty,
+                explanation=explanation,
+            ))
+
+        result.propagation_paths    = new_paths
+        result.filtered_path_count  = len(new_paths)
+        result.rejected_path_count  = len(rejected)
+        result.calibration_method   = "isotonic" if path_ranker.calib.is_fitted else "none"
+
+        logger.info(
+            "GNN v3 ranking: kept=%d rejected=%d (top_k=%d)",
+            len(new_paths), len(rejected), top_k_paths,
+        )
+        return result
+
+    # ── v3 helpers ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _annotate_edge_labels(snapshot: Dict[str, Any]) -> None:
+        """Stamp src_label / dst_label on each edge so EdgeTypePolicy can look
+        them up. Idempotent."""
+        nodes = snapshot.get("nodes") or []
+        label_by_id: Dict[str, str] = {}
+        for n in nodes:
+            labels = n.get("labels") or []
+            label_by_id[str(n.get("id"))] = labels[0] if labels else "Unknown"
+        for e in snapshot.get("edges") or []:
+            e.setdefault("src_label", label_by_id.get(str(e.get("from")), "Unknown"))
+            e.setdefault("dst_label", label_by_id.get(str(e.get("to")), "Unknown"))
+
+    @staticmethod
+    def _annotate_step_edges(path_dict: Dict[str, Any], snapshot: Dict[str, Any]) -> None:
+        """Decorate each step with relation_strength / freshness_score / etc.
+        Looked up from the snapshot edges by (relation_type, node_name)."""
+        edges = snapshot.get("edges") or []
+        # index edges by (type, dst-name)
+        nodes_by_id = {str(n.get("id")): n for n in (snapshot.get("nodes") or [])}
+        edge_index: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for e in edges:
+            dst_name = (nodes_by_id.get(str(e.get("to")), {}) or {}).get("name", "")
+            edge_index[(e.get("type") or "", dst_name)] = e
+
+        for step in path_dict.get("steps") or []:
+            key = (step.get("relation_type") or "", step.get("node_name") or "")
+            edge = edge_index.get(key)
+            if not edge:
+                continue
+            step.setdefault("relation_strength", edge.get("relation_strength"))
+            step.setdefault("freshness_score",   edge.get("freshness_score"))
+            step.setdefault("edge_confidence",   edge.get("confidence"))
+            step.setdefault("evidence_quality",  edge.get("evidence_quality"))
+            step.setdefault("category",          edge.get("category"))
+            step.setdefault("half_life_days",    edge.get("half_life_days"))
+            step.setdefault("src_label",         edge.get("src_label"))
+            step.setdefault("dst_label",         edge.get("dst_label"))
+
+
+# ── Helper ─────────────────────────────────────────────────────────────────────
 
 def _compute_hops(snapshot: Dict, target_name: str, source_name: str) -> int:
     """BFS hop count from source to target in the snapshot graph."""
-    edges = snapshot.get("edges", [])
-    nodes = snapshot.get("nodes", [])
-    name_map = {n["id"]: n["name"] for n in nodes}
-    id_map = {n["name"]: n["id"] for n in nodes}
+    edges  = snapshot.get("edges", [])
+    nodes  = snapshot.get("nodes", [])
+    id_map = {n["name"]: n["id"] for n in nodes if "id" in n and "name" in n}
 
     src_id = id_map.get(source_name)
     dst_id = id_map.get(target_name)
     if src_id is None or dst_id is None:
         return 1
 
-    # BFS
     adj: Dict[str, List[str]] = {}
     for e in edges:
-        adj.setdefault(e["from"], []).append(e["to"])
+        adj.setdefault(str(e.get("from", "")), []).append(str(e.get("to", "")))
 
-    visited = {src_id}
-    queue = [(src_id, 0)]
+    visited: set = {src_id}
+    queue: deque = deque([(src_id, 0)])
     while queue:
-        cur, hops = queue.pop(0)
+        cur, hops = queue.popleft()
         if cur == dst_id:
             return hops
         for nxt in adj.get(cur, []):
             if nxt not in visited:
                 visited.add(nxt)
                 queue.append((nxt, hops + 1))
-    return 3   # not found → assume distant
+    return 3
 
 
-class _DummyContext:
-    """Context manager no-op for when torch.no_grad() is unavailable."""
-    def __enter__(self): return self
-    def __exit__(self, *a): pass
+# ── Propagation path extraction ────────────────────────────────────────────────
+
+_HORIZON_ORDER  = {"immediate": 0, "short_term": 1, "medium_term": 2, "long_term": 3}
+_HORIZON_LABELS = {
+    "immediate":   "1-2 semaines",
+    "short_term":  "2-4 semaines",
+    "medium_term": "1-3 mois",
+    "long_term":   "3-6 mois",
+}
+_SOURCE_PRIORITY_LABELS = {"Event", "News", "Competitor", "Regulation", "MacroIndicator"}
+
+
+def _horizon_label(horizons: List[str]) -> str:
+    if not horizons:
+        return "1-3 mois"
+    worst = max(horizons, key=lambda h: _HORIZON_ORDER.get(h, 1))
+    return _HORIZON_LABELS.get(worst, "1-3 mois")
+
+
+def _build_narrative(source_name: str, steps: List[Any], chain_score: float) -> str:
+    direction  = "négatif" if chain_score < 0 else "positif"
+    intensity  = "fort" if abs(chain_score) > 0.5 else "modéré" if abs(chain_score) > 0.25 else "faible"
+    chain_desc = " -> ".join(s.node_name for s in steps) + " -> Talan"
+    reasons    = "; ".join(
+        s.reason for s in steps
+        if s.reason and s.reason.strip() and not s.reason.startswith("Propagation via")
+    )[:500]
+    narrative  = (
+        f"**{source_name}** génère un impact {intensity} {direction} sur Talan "
+        f"via la chaîne causale : {chain_desc}."
+    )
+    if reasons:
+        narrative += f"\n\n{reasons}"
+    return narrative
+
+
+def _extract_propagation_paths(
+    snapshot: Dict[str, Any],
+    predictions: List[Any],
+    max_paths: int = 8,
+    max_hops: int = 3,
+    entity_title_map: Optional[Dict[str, str]] = None,
+) -> List[Any]:
+    """
+    BFS from each high-impact source node to Talan, reconstructing the full
+    causal edge chain.  Returns up to max_paths PropagationPath objects,
+    sorted by absolute chain_score descending.
+    """
+    from app.schemas.market_analysis_schemas import PropagationPath, PropagationStep
+
+    nodes = snapshot.get("nodes", [])
+    edges = snapshot.get("edges", [])
+    if not nodes or not edges:
+        return []
+
+    # ── Build lookup tables ──────────────────────────────────────────────────
+    node_by_id:   Dict[str, Dict] = {}
+    node_by_name: Dict[str, Dict] = {}
+    for n in nodes:
+        nid = str(n.get("id", n.get("name", "")))
+        node_by_id[nid] = n
+        node_by_name[n.get("name", "")] = n
+
+    talan_node = node_by_name.get("Talan")
+    if not talan_node:
+        return []
+    talan_id = str(talan_node.get("id", talan_node.get("name", "Talan")))
+
+    # Forward adjacency: from_id → [(to_id, edge_dict), …]
+    adj: Dict[str, List[Tuple[str, Dict]]] = defaultdict(list)
+    # Reverse adjacency: to_id → [(from_id, edge_dict), …]  — used to find News triggers
+    rev_adj: Dict[str, List[Tuple[str, Dict]]] = defaultdict(list)
+    for edge in edges:
+        src_id = str(edge.get("from", ""))
+        dst_id = str(edge.get("to",   ""))
+        if src_id and dst_id and src_id != dst_id:
+            adj[src_id].append((dst_id, edge))
+            rev_adj[dst_id].append((src_id, edge))
+
+    def _find_news_trigger(entity_id: str) -> Optional[Dict]:
+        """Return the first News node that directly points to entity_id."""
+        for pred_id, _ in rev_adj.get(entity_id, []):
+            pred_node = node_by_id.get(pred_id, {})
+            if "News" in (pred_node.get("labels") or []):
+                return pred_node
+        return None
+
+    # ── BFS: find all directed paths from start_id to Talan (≤ max_hops) ────
+    def bfs_to_talan(start_id: str) -> List[List[Tuple[str, str, Dict]]]:
+        if start_id == talan_id:
+            return []
+        found: List[List[Tuple[str, str, Dict]]] = []
+        queue: deque = deque([(start_id, [], {start_id})])
+        while queue:
+            cur_id, path_edges, visited = queue.popleft()
+            if len(path_edges) >= max_hops:
+                continue
+            for next_id, edge in adj.get(cur_id, []):
+                if next_id in visited:
+                    continue
+                new_path = path_edges + [(cur_id, next_id, edge)]
+                if next_id == talan_id:
+                    found.append(new_path)
+                else:
+                    queue.append((next_id, new_path, visited | {next_id}))
+        return found
+
+    # ── Candidate source nodes ───────────────────────────────────────────────
+    # News nodes first (they carry article titles → comprehensible events),
+    # then other priority types (Event, Competitor, Regulation, MacroIndicator).
+    pred_by_name = {p.entity_name: p for p in predictions}
+
+    news_ids:   List[str] = []
+    entity_ids: List[str] = []
+    for nid, node in node_by_id.items():
+        if nid == talan_id:
+            continue
+        labels = node.get("labels") or ["Company"]
+        label  = labels[0]
+        name   = node.get("name", "")
+        pred   = pred_by_name.get(name)
+        if "News" in labels:
+            news_ids.append(nid)
+        elif label in _SOURCE_PRIORITY_LABELS or (pred and abs(pred.predicted_impact) > 0.15):
+            entity_ids.append(nid)
+
+    # News nodes processed first so they fill seen_names before entity duplicates
+    candidate_ids = news_ids + entity_ids
+
+    # ── Collect all paths ────────────────────────────────────────────────────
+    def _signed_score(edge: Dict) -> float:
+        s   = float(edge.get("impact_score") or 0.0)
+        neg = str(edge.get("impact_direction", "")).lower() == "negative"
+        return -abs(s) if neg else abs(s)
+
+    # key = (source_name, intermediate_node_sequence) — dedup identical chains
+    seen_path_keys: set = set()
+    scored: List[Tuple[float, float, str, str, List]] = []
+
+    for src_id in candidate_ids:
+        paths = bfs_to_talan(src_id)
+        for path_edges in paths:
+            edge_scores = [_signed_score(e) for _, _, e in path_edges]
+            chain_score = float(np.mean(edge_scores)) if edge_scores else 0.0
+            chain_conf  = float(np.mean([float(e.get("confidence") or 0.5)
+                                         for _, _, e in path_edges]))
+            src_node = node_by_id.get(src_id, {})
+            src_name = src_node.get("name", src_id)
+            # Dedup key: source name + ordered intermediate node IDs
+            mid_ids = tuple(to_id for _, to_id, _ in path_edges[:-1])
+            path_key = (src_name, mid_ids)
+            if path_key in seen_path_keys:
+                continue
+            seen_path_keys.add(path_key)
+            scored.append((chain_score, chain_conf, src_id, src_name, path_edges))
+
+    if not scored:
+        return []
+
+    scored.sort(key=lambda x: abs(x[0]), reverse=True)
+
+    # Final dedup: keep best path per source_name
+    seen_names: set = set()
+    deduped: List = []
+    for entry in scored:
+        name = entry[3]
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        deduped.append(entry)
+
+    # ── Build PropagationPath objects ─────────────────────────────────────────
+    result: List[Any] = []
+    for chain_score, chain_conf, src_id, src_name, path_edges in deduped[:max_paths]:
+        src_node  = node_by_id.get(src_id, {})
+        src_label = (src_node.get("labels") or ["Company"])[0]
+        src_props = src_node.get("properties", {})
+
+        steps: List[PropagationStep] = []
+        for from_id, to_id, edge in path_edges:
+            from_node  = node_by_id.get(from_id, {})
+            from_name  = from_node.get("name", from_id)
+            from_label = (from_node.get("labels") or ["Company"])[0]
+            from_type  = _LABEL_MAP.get(from_label, "Company")
+
+            to_name = node_by_id.get(to_id, {}).get("name", to_id)
+            reason  = (edge.get("reason") or edge.get("evidence") or
+                       f"Propagation via {edge.get('type', 'CAUSES_IMPACT_ON')} vers {to_name}")
+            th      = edge.get("time_horizon") or "short_term"
+            rel     = str(edge.get("type", "CAUSES_IMPACT_ON"))
+
+            steps.append(PropagationStep(
+                node_name     = from_name,
+                node_type     = from_type,
+                relation_type = rel,
+                reason        = reason,
+                impact_score  = round(_signed_score(edge), 3),
+                time_horizon  = th,
+            ))
+
+        # Event title — priority order:
+        #  1. News node: use stored article title directly
+        #  2. Entity: best incoming-edge reason (what caused this entity to matter)
+        #  3. Entity: linked News node title (reverse lookup)
+        #  4. Entity: description from KG properties
+        #  5. Last resort: entity name
+        src_labels = src_node.get("labels") or []
+
+        def _best_incoming_reason(node_id: str) -> str:
+            """Pick the most informative reason from edges pointing TO this node."""
+            candidates = []
+            for pred_id, edge in rev_adj.get(node_id, []):
+                r = edge.get("reason") or edge.get("evidence") or ""
+                # Skip generic auto-generated fallback reasons
+                if r and not r.startswith("Propagation via"):
+                    candidates.append(r)
+            return max(candidates, key=len) if candidates else ""
+
+        # entity_title_map from orchestrator: entity_name → article headline
+        _etm = entity_title_map or snapshot.get("entity_title_map") or {}
+
+        _type_fr = {
+            "Company": "Entreprise", "Competitor": "Concurrent",
+            "MacroIndicator": "Indicateur macro", "Event": "Événement",
+            "Regulation": "Réglementation", "Sector": "Secteur",
+            "Country": "Pays", "News": "Article",
+        }
+        _impact_fr = (
+            "risque critique" if chain_score < -0.5 else
+            "menace significative" if chain_score < -0.2 else
+            "signal positif" if chain_score > 0.2 else "signal neutre"
+        )
+
+        def _contextual_title() -> str:
+            """Build a descriptive title when no article text is available."""
+            intermediates = [s.node_name for s in steps[1:] if s.node_name != "Talan"]
+            via = " → ".join(intermediates) if intermediates else ""
+            type_label = _type_fr.get(src_label, src_label)
+            if via:
+                return f"{src_name} ({type_label}) — {_impact_fr} via {via} → Talan"
+            return f"{src_name} ({type_label}) — {_impact_fr} sur Talan"
+
+        if "News" in src_labels:
+            event_title = (src_props.get("title") or src_name)[:160]
+        elif src_name in _etm:
+            event_title = _etm[src_name][:160]
+        else:
+            incoming_reason = _best_incoming_reason(src_id)
+            if incoming_reason:
+                event_title = incoming_reason[:160]
+            else:
+                news_trigger = _find_news_trigger(src_id)
+                if news_trigger:
+                    news_props = news_trigger.get("properties", {})
+                    news_title = news_props.get("title") or _etm.get(src_name) or ""
+                    event_title = (news_title[:160] if news_title
+                                   else _contextual_title())
+                else:
+                    node_desc = src_props.get("description") or ""
+                    event_title = (node_desc[:120] if node_desc
+                                   else _contextual_title())
+
+        # Key impact: the step with the most negative score
+        key_step = min(steps, key=lambda s: s.impact_score) if steps else None
+        key_impact = key_step.reason[:200] if key_step else ""
+
+        # Source evidence: URL if News node, else best edge evidence/reason
+        source_evidence = ""
+        if "News" in src_labels:
+            source_evidence = (src_props.get("external_id") or
+                               src_props.get("url") or "")
+        if not source_evidence:
+            news_trigger = _find_news_trigger(src_id)
+            if news_trigger:
+                nt_props = news_trigger.get("properties", {})
+                source_evidence = (nt_props.get("external_id") or
+                                   nt_props.get("url") or "")
+        if not source_evidence:
+            # Use the best incoming-edge evidence as article excerpt
+            for pred_id, edge in rev_adj.get(src_id, []):
+                ev = edge.get("evidence") or ""
+                if ev and not ev.startswith("Propagation via"):
+                    source_evidence = ev[:300]
+                    break
+        if not source_evidence:
+            # Last fallback: first edge in the chain
+            for _, _, edge in path_edges:
+                ev = edge.get("evidence") or ""
+                if ev:
+                    source_evidence = ev[:300]
+                    break
+
+        result.append(PropagationPath(
+            source_name        = src_name,
+            source_type        = _LABEL_MAP.get(src_label, "Company"),
+            steps              = steps,
+            chain_score        = round(chain_score, 4),
+            chain_conf         = round(chain_conf, 3),
+            hops               = len(path_edges),
+            time_horizon_label = _horizon_label([s.time_horizon for s in steps]),
+            narrative          = _build_narrative(src_name, steps, chain_score),
+            event_title        = event_title,
+            key_impact         = key_impact,
+            source_evidence    = source_evidence,
+        ))
+
+    return result

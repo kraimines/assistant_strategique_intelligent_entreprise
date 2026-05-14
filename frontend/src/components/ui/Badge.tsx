@@ -2,40 +2,51 @@ import type { AgentType } from '../../types';
 
 interface BadgeProps {
   label: string;
-  variant?: 'cyan' | 'violet' | 'emerald' | 'amber' | 'pink' | 'gray' | 'red';
+  variant?: 'blue' | 'teal' | 'emerald' | 'amber' | 'violet' | 'gray' | 'red'
+           /* legacy aliases kept for backward compat: */
+           | 'cyan' | 'violet' | 'pink';
   size?: 'sm' | 'md';
 }
 
-const variants = {
-  cyan: 'bg-cyber-cyan/10 text-cyber-cyan border border-cyber-cyan/30',
-  violet: 'bg-cyber-violet/10 text-cyber-violet border border-cyber-violet/30',
-  emerald: 'bg-cyber-emerald/10 text-cyber-emerald border border-cyber-emerald/30',
-  amber: 'bg-cyber-amber/10 text-cyber-amber border border-cyber-amber/30',
-  pink: 'bg-cyber-pink/10 text-cyber-pink border border-cyber-pink/30',
-  gray: 'bg-white/5 border border-white/10',
-  red: 'bg-red-500/10 text-red-400 border border-red-500/30',
+/* ── Variant → inline style mapping (uses CSS vars where possible) ───────── */
+const variantStyle: Record<string, React.CSSProperties> = {
+  // Cold palette variants
+  blue:    { background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' },
+  teal:    { background: '#F0FDFA', color: '#0D9488', border: '1px solid #99F6E4' },
+  emerald: { background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' },
+  amber:   { background: '#FFFBEB', color: '#D97706', border: '1px solid #FDE68A' },
+  violet:  { background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE' },
+  gray:    { background: '#F8FAFC', color: '#64748B', border: '1px solid #E2E8F0' },
+  red:     { background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' },
+  // Legacy aliases
+  cyan:    { background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' },
+  pink:    { background: '#FDF4FF', color: '#9333EA', border: '1px solid #F3E8FF' },
 };
 
 const sizes = {
   sm: 'text-xs px-2 py-0.5 rounded-md',
-  md: 'text-sm px-3 py-1 rounded-lg',
+  md: 'text-sm px-2.5 py-1 rounded-lg',
 };
 
-export default function Badge({ label, variant = 'cyan', size = 'sm' }: BadgeProps) {
+export default function Badge({ label, variant = 'blue', size = 'sm' }: BadgeProps) {
+  const style = variantStyle[variant] ?? variantStyle.blue;
   return (
-    <span className={`inline-flex items-center font-medium ${variants[variant]} ${sizes[size]}`}>
+    <span
+      className={`inline-flex items-center font-semibold ${sizes[size]}`}
+      style={style}
+    >
       {label}
     </span>
   );
 }
 
-// Agent-specific badge
+/* ── Agent-specific badge ────────────────────────────────────────────────── */
 const agentConfig: Record<AgentType, { label: string; variant: BadgeProps['variant'] }> = {
-  hr: { label: '👤 RH Agent', variant: 'cyan' },
-  crm: { label: '📊 CRM Agent', variant: 'violet' },
-  erp: { label: '⚙️ ERP Agent', variant: 'amber' },
-  rag: { label: '📚 RAG', variant: 'emerald' },
-  orchestrator: { label: '🤖 Orchestrateur', variant: 'pink' },
+  hr:           { label: '👤 RH',           variant: 'teal'    },
+  crm:          { label: '📊 CRM',          variant: 'blue'    },
+  erp:          { label: '⚙️ ERP',          variant: 'amber'   },
+  rag:          { label: '📚 RAG',          variant: 'emerald' },
+  orchestrator: { label: '🤖 Orchestrateur', variant: 'violet'  },
 };
 
 export function AgentBadge({ agent }: { agent: AgentType }) {

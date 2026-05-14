@@ -12,6 +12,7 @@ import Simulation from './pages/Simulation';
 import WorldModelExplorer from './pages/WorldModelExplorer';
 import CompetitiveIntel from './pages/CompetitiveIntel';
 import MarketAnalysis from './pages/MarketAnalysis';
+import MarketSimulate from './pages/MarketSimulate';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/world-model" element={<ProtectedRoute><WorldModelExplorer /></ProtectedRoute>} />
           <Route path="/competitive-intel" element={<ProtectedRoute><CompetitiveIntel /></ProtectedRoute>} />
           <Route path="/market-analysis"  element={<ProtectedRoute><MarketAnalysis /></ProtectedRoute>} />
+          <Route path="/market-simulate"  element={<ProtectedRoute><MarketSimulate /></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,13 +1,6 @@
 /**
- * CompetitiveIntel.tsx — Competitive intelligence visualization dashboard.
- *
- * Sections (top → bottom):
- *   1. Search bar — company tags + topic selector
- *   2. KPI strip  — threat level, news count, jobs count, last updated
- *   3. Row A       — ThreatRadar  |  NewsTimeline
- *   4. Row B       — JobSignalsChart (full width)
- *   5. Row C       — AnticipationPanel (full width) ← "what they will do"
- *   6. Row D       — StrategicRecommendations (full width)
+ * CompetitiveIntel.tsx — Competitive intelligence dashboard.
+ * Cold light palette — dark readable text, larger font sizes.
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,18 +21,10 @@ import Button from '../components/ui/Button';
 import { competitiveIntelApi } from '../api/competitiveIntelApi';
 import type { ScanResult } from '../api/competitiveIntelApi';
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
 const TOPIC_OPTIONS = [
-  'intelligence artificielle',
-  'cloud computing',
-  'cybersécurité',
-  'digital transformation',
-  'recrutement',
-  'partenariats',
-  'expansion marché',
-  'fintech',
-  'data & analytics',
+  'intelligence artificielle', 'cloud computing', 'cybersécurité',
+  'digital transformation', 'recrutement', 'partenariats',
+  'expansion marché', 'fintech', 'data & analytics',
 ];
 
 const SUGGESTED_COMPANIES = [
@@ -47,38 +32,41 @@ const SUGGESTED_COMPANIES = [
   'Atos', 'Devoteam', 'Alten', 'Wavestone', 'IBM',
 ];
 
-// ── KPI strip ──────────────────────────────────────────────────────────────────
-
+/* ── KPI strip ───────────────────────────────────────────────────────────── */
 function KpiStrip({ result }: { result: ScanResult }) {
   const { analysis } = result;
   const pct = Math.round(analysis.threat_level * 100);
   const threatColor =
-    pct >= 75 ? '#ef4444' : pct >= 50 ? '#f97316' : pct >= 25 ? '#eab308' : '#22c55e';
+    pct >= 75 ? '#DC2626' : pct >= 50 ? '#EA580C' : pct >= 25 ? '#D97706' : '#059669';
 
   const kpis = [
     {
-      icon: <ShieldAlert size={16} />,
+      icon: <ShieldAlert size={18} />,
       label: 'Niveau de menace',
       value: `${analysis.threat_label} (${pct}%)`,
       color: threatColor,
+      bg: `${threatColor}12`,
     },
     {
-      icon: <Newspaper size={16} />,
+      icon: <Newspaper size={18} />,
       label: 'Actualités analysées',
       value: String(analysis.total_news),
-      color: '#00d4ff',
+      color: '#2563EB',
+      bg: '#EFF6FF',
     },
     {
-      icon: <Briefcase size={16} />,
+      icon: <Briefcase size={18} />,
       label: 'Signaux recrutement',
       value: String(analysis.total_jobs),
-      color: '#7c3aed',
+      color: '#7C3AED',
+      bg: '#F5F3FF',
     },
     {
-      icon: <Clock size={16} />,
+      icon: <Clock size={18} />,
       label: 'Mouvements anticipés',
       value: String(analysis.anticipated_moves?.length ?? 0),
-      color: '#f97316',
+      color: '#EA580C',
+      bg: '#FFF7ED',
     },
   ];
 
@@ -91,38 +79,44 @@ function KpiStrip({ result }: { result: ScanResult }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.06 }}
         >
-          <GlassCard className="p-4 flex items-center gap-3">
+          <div
+            className="p-4 rounded-[14px] flex items-center gap-3"
+            style={{
+              background: 'var(--bg-surface)',
+              border:     '1px solid var(--border-subtle)',
+              boxShadow:  'var(--shadow-card)',
+            }}
+          >
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: `${kpi.color}15`, color: kpi.color }}
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: kpi.bg, color: kpi.color }}
             >
               {kpi.icon}
             </div>
             <div className="min-w-0">
-              <p className="text-white/40 text-[10px] leading-tight">{kpi.label}</p>
-              <p className="text-white font-semibold text-sm mt-0.5" style={{ color: kpi.color }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-faint)' }}>
+                {kpi.label}
+              </p>
+              <p className="text-base font-bold mt-0.5" style={{ color: kpi.color }}>
                 {kpi.value}
               </p>
             </div>
-          </GlassCard>
+          </div>
         </motion.div>
       ))}
     </div>
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-
+/* ── Main component ──────────────────────────────────────────────────────── */
 export default function CompetitiveIntel() {
-  const [companies, setCompanies] = useState<string[]>(['Sopra Steria']);
-  const [topic, setTopic] = useState('intelligence artificielle');
-  const [inputValue, setInputValue] = useState('');
+  const [companies,       setCompanies]       = useState<string[]>(['Sopra Steria']);
+  const [topic,           setTopic]           = useState('intelligence artificielle');
+  const [inputValue,      setInputValue]      = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ScanResult | null>(null);
-
-  // ── Company tag management ────────────────────────────────────────────────
+  const [loading,         setLoading]         = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+  const [result,          setResult]          = useState<ScanResult | null>(null);
 
   const addCompany = (name: string) => {
     const t = name.trim();
@@ -131,21 +125,15 @@ export default function CompetitiveIntel() {
     setInputValue('');
     setShowSuggestions(false);
   };
-
-  const removeCompany = (name: string) =>
-    setCompanies((p) => p.filter((c) => c !== name));
-
+  const removeCompany = (name: string) => setCompanies((p) => p.filter((c) => c !== name));
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') addCompany(inputValue);
+    if (e.key === 'Enter')  addCompany(inputValue);
     if (e.key === 'Escape') setShowSuggestions(false);
   };
 
-  // ── Scan ──────────────────────────────────────────────────────────────────
-
   const handleScan = async () => {
     if (!companies.length) return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const resp = await competitiveIntelApi.scan(companies, topic, 8);
       setResult(resp.data);
@@ -164,19 +152,27 @@ export default function CompetitiveIntel() {
     (c) => !companies.includes(c) && c.toLowerCase().includes(inputValue.toLowerCase()),
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <AppShell title="Veille Concurrentielle">
-      <div className="p-6 space-y-6">
+      <div
+        className="p-6 space-y-6"
+        style={{
+          background: 'linear-gradient(180deg, #F8FAFC 0%, #F8FBFF 45%, #FDFDFF 100%)',
+        }}
+      >
+        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-sky-100/60 blur-3xl" />
+          <div className="absolute top-40 -left-28 h-80 w-80 rounded-full bg-violet-100/55 blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 h-64 w-64 rounded-full bg-emerald-100/40 blur-3xl" />
+        </div>
 
-        {/* ── Controls ──────────────────────────────────────────────────────── */}
-        <GlassCard animate className="p-5">
+        {/* ── Controls card ────────────────────────────────────────────── */}
+        <GlassCard animate className="p-6">
           <div className="flex flex-col gap-4">
 
             {/* Company tags */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-white/50 text-xs whitespace-nowrap flex-shrink-0">
+              <span className="text-base font-semibold flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>
                 Concurrents :
               </span>
 
@@ -184,18 +180,22 @@ export default function CompetitiveIntel() {
                 {companies.map((company) => (
                   <motion.span
                     key={company}
-                    initial={{ opacity: 0, scale: 0.8 }}
+                    initial={{ opacity: 0, scale: 0.85 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium
-                      bg-cyber-cyan/10 border border-cyber-cyan/25 text-cyber-cyan"
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold"
+                    style={{
+                      background:  '#EFF6FF',
+                      border:      '1px solid #BFDBFE',
+                      color:       '#1D4ED8',
+                    }}
                   >
                     {company}
                     <button
                       onClick={() => removeCompany(company)}
-                      className="text-cyber-cyan/50 hover:text-cyber-cyan transition-colors"
+                      className="opacity-60 hover:opacity-100 transition-opacity"
                     >
-                      <X size={11} />
+                      <X size={12} />
                     </button>
                   </motion.span>
                 ))}
@@ -203,9 +203,15 @@ export default function CompetitiveIntel() {
 
               {companies.length < 5 && (
                 <div className="relative">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg
-                    bg-white/5 border border-white/10 text-white/60 text-xs">
-                    <Plus size={11} />
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm"
+                    style={{
+                      background: 'var(--bg-base)',
+                      border:     '1px solid var(--border-subtle)',
+                      color:      'var(--text-muted)',
+                    }}
+                  >
+                    <Plus size={13} />
                     <input
                       value={inputValue}
                       onChange={(e) => { setInputValue(e.target.value); setShowSuggestions(true); }}
@@ -213,24 +219,36 @@ export default function CompetitiveIntel() {
                       onFocus={() => setShowSuggestions(true)}
                       onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                       placeholder="Ajouter…"
-                      className="bg-transparent outline-none placeholder-white/25 w-32 text-white"
+                      className="bg-transparent outline-none w-28"
+                      style={{ color: 'var(--text-primary)' }}
                     />
                   </div>
+
                   <AnimatePresence>
                     {showSuggestions && suggestions.length > 0 && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
-                        className="absolute top-full left-0 mt-1 w-48 z-50 rounded-xl overflow-hidden shadow-2xl"
-                        style={{ background: 'var(--bg-overlay-card)', border: '1px solid var(--border-subtle)' }}
+                        className="absolute top-full left-0 mt-1.5 w-48 z-50 rounded-xl overflow-hidden"
+                        style={{
+                          background: 'var(--bg-surface)',
+                          border:     '1px solid var(--border-subtle)',
+                          boxShadow:  'var(--shadow-card-md)',
+                        }}
                       >
                         {suggestions.slice(0, 6).map((s) => (
                           <button
                             key={s}
                             onMouseDown={() => addCompany(s)}
-                            className="w-full text-left px-3 py-2 text-xs transition-colors"
+                            className="w-full text-left px-3 py-2.5 text-sm font-medium transition-colors"
                             style={{ color: 'var(--text-secondary)' }}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-base)';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                            }}
                           >
                             {s}
                           </button>
@@ -244,16 +262,17 @@ export default function CompetitiveIntel() {
 
             {/* Topic + actions */}
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-white/50 text-xs whitespace-nowrap flex-shrink-0">
+              <span className="text-base font-semibold flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>
                 Sujet stratégique :
               </span>
               <select
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                className="theme-input rounded-lg px-3 py-1.5 text-xs focus:border-cyber-cyan/40 transition-colors cursor-pointer"
+                className="theme-input rounded-xl px-3 py-2.5 text-base cursor-pointer"
+                style={{ color: 'var(--text-primary)' }}
               >
                 {TOPIC_OPTIONS.map((t) => (
-                  <option key={t} value={t} style={{ background: 'var(--bg-card)' }}>{t}</option>
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
 
@@ -261,33 +280,42 @@ export default function CompetitiveIntel() {
                 <button
                   onClick={handleClearCache}
                   title="Vider le cache"
-                  className="p-1.5 rounded-lg text-white/25 hover:text-white/60
-                    hover:bg-white/5 transition-all"
+                  className="p-2 rounded-xl transition-all"
+                  style={{ color: 'var(--text-faint)' }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-base)';
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-faint)';
+                  }}
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={15} />
                 </button>
                 <Button
                   onClick={handleScan}
                   disabled={loading || companies.length === 0}
-                  icon={loading
-                    ? <Loader2 size={14} className="animate-spin" />
-                    : <Search size={14} />
-                  }
+                  icon={loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
                 >
-                  {loading ? 'Analyse…' : 'Analyser'}
+                  {loading ? 'Analyse en cours…' : 'Analyser'}
                 </Button>
               </div>
             </div>
           </div>
         </GlassCard>
 
-        {/* ── Error ────────────────────────────────────────────────────────── */}
+        {/* ── Error ───────────────────────────────────────────────────── */}
         <AnimatePresence>
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="flex items-center gap-3 p-4 rounded-xl bg-red-500/8
-                border border-red-500/25 text-red-300 text-sm"
+              className="flex items-center gap-3 p-4 rounded-xl text-sm font-medium"
+              style={{
+                background:  'var(--danger-subtle)',
+                border:      '1px solid rgba(239,68,68,0.25)',
+                color:       'var(--danger)',
+              }}
             >
               <AlertCircle size={16} className="flex-shrink-0" />
               <span>{error}</span>
@@ -295,79 +323,85 @@ export default function CompetitiveIntel() {
           )}
         </AnimatePresence>
 
-        {/* ── Empty state ──────────────────────────────────────────────────── */}
+        {/* ── Empty state ──────────────────────────────────────────────── */}
         {!result && !loading && !error && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="flex flex-col items-center justify-center py-28 gap-5"
           >
             <div className="relative">
-              <div className="w-20 h-20 rounded-2xl bg-cyber-cyan/8 border border-cyber-cyan/15
-                flex items-center justify-center">
-                <Search size={32} className="text-cyber-cyan/40" />
+              <div
+                className="w-20 h-20 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: '#EFF6FF',
+                  border:     '1px solid #BFDBFE',
+                }}
+              >
+                <Search size={32} style={{ color: '#93C5FD' }} />
               </div>
-              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full
-                bg-cyber-violet/30 border border-cyber-violet/40 flex items-center justify-center">
-                <Clock size={10} className="text-cyber-violet" />
+              <div
+                className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}
+              >
+                <Clock size={12} style={{ color: '#7C3AED' }} />
               </div>
             </div>
             <div className="text-center max-w-sm">
-              <p className="text-white/50 text-sm font-medium mb-1">
+              <p className="text-base font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
                 Analysez vos concurrents
               </p>
-              <p className="text-white/25 text-xs leading-relaxed">
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                 Sélectionnez une ou plusieurs entreprises, choisissez un thème stratégique
-                et lancez l'analyse pour visualiser leurs mouvements et anticiper leurs prochaines actions.
+                et lancez l'analyse pour visualiser leurs mouvements.
               </p>
             </div>
           </motion.div>
         )}
 
-        {/* ── Loading ──────────────────────────────────────────────────────── */}
+        {/* ── Skeleton loading ─────────────────────────────────────────── */}
         {loading && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
               {[1,2,3,4].map(i => (
-                <div key={i} className="h-16 rounded-xl bg-white/3 border border-white/6 animate-pulse" />
+                <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: 'var(--border-subtle)' }} />
               ))}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {[1,2].map(i => (
-                <div key={i} className="h-72 rounded-2xl bg-white/3 border border-white/6 animate-pulse" />
+                <div key={i} className="h-72 rounded-2xl animate-pulse" style={{ background: 'var(--border-subtle)' }} />
               ))}
             </div>
-            <div className="h-56 rounded-2xl bg-white/3 border border-white/6 animate-pulse" />
-            <div className="h-64 rounded-2xl bg-white/3 border border-white/6 animate-pulse" />
+            <div className="h-56 rounded-2xl animate-pulse" style={{ background: 'var(--border-subtle)' }} />
           </div>
         )}
 
-        {/* ── Results ──────────────────────────────────────────────────────── */}
+        {/* ── Results ──────────────────────────────────────────────────── */}
         <AnimatePresence>
           {result && !loading && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="flex flex-col gap-6"
             >
-              {/* Meta */}
-              <div className="flex items-center gap-2 text-white/25 text-xs">
-                <RefreshCw size={11} />
+              {/* Meta info */}
+              <div
+                className="flex items-center gap-2 text-xs font-medium"
+                style={{ color: 'var(--text-faint)' }}
+              >
+                <RefreshCw size={12} />
                 <span>
                   Mis à jour le{' '}
                   {new Date(result.analysis.analyzed_at).toLocaleString('fr-FR', {
                     day: '2-digit', month: 'short', year: 'numeric',
                     hour: '2-digit', minute: '2-digit',
                   })}
-                  {' · '}
-                  {result.companies.join(', ')}
-                  {' · '}
-                  Thème : {result.topic}
+                  {' · '}{result.companies.join(', ')}
+                  {' · '}Thème : {result.topic}
                 </span>
               </div>
 
-              {/* KPI strip */}
               <KpiStrip result={result} />
 
-              {/* Row A : Radar + News */}
+              {/* Row A: Radar + News */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <ThreatRadar
                   scores={result.analysis.radar_scores}
@@ -377,19 +411,17 @@ export default function CompetitiveIntel() {
                 <NewsTimeline articles={result.news} />
               </div>
 
-              {/* Row B : Job signals */}
-              {result.jobs && (
-                <JobSignalsChart jobsData={result.jobs} />
-              )}
+              {/* Row B: Job signals */}
+              {result.jobs && <JobSignalsChart jobsData={result.jobs} />}
 
-              {/* Row C : Anticipation — WHAT THEY WILL DO */}
+              {/* Row C: Anticipation */}
               <AnticipationPanel
                 anticipatedMoves={result.analysis.anticipated_moves ?? []}
                 hiringSignals={result.analysis.hiring_signals ?? []}
                 companies={result.companies}
               />
 
-              {/* Row D : Recommendations + Key moves */}
+              {/* Row D: Recommendations */}
               <StrategicRecommendations
                 recommendations={result.analysis.recommended_actions}
                 keyMoves={result.analysis.key_moves}

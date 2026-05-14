@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.market_analysis_models import MarketAlert as MarketAlertModel
 from app.models.market_analysis_models import MarketPipelineRun, MarketReport as MarketReportModel
+from app.models.market_analysis_models import MarketGNNScore
 from app.schemas.market_analysis_schemas import (
     AlertLevel, MarketAlert, MarketReport, PipelineStatus,
 )
@@ -53,6 +54,7 @@ def _ensure_tables() -> None:
     from app.models.market_analysis_models import (  # noqa: F401 — register models
         MarketRawArticle, MarketNewsAnalysis,
         MarketAlert as _MA, MarketReport as _MR, MarketPipelineRun,
+        MarketGNNScore, MarketRecommendation,  # noqa: F401 — register tables with Base.metadata
     )
     engine = _get_engine()
     Base.metadata.create_all(
@@ -78,11 +80,35 @@ class MarketAnalysisPipeline:
         from app.services.market_analysis.analyst import NewsAnalyst
         from app.services.market_analysis.world_model import WorldModel
         from app.services.market_analysis.gnn_predictor import GNNPredictor
+        from app.services.market_analysis.policy import EdgeTypePolicy, GraphSanitizer
+        from app.services.market_analysis.scoring import (
+            HubPenalty, TemporalDecay, TGATCalibrator, PlausibilityScorer,
+        )
+        from app.services.market_analysis.ranking import PathRanker
+        from app.services.market_analysis.explain import ExplanationGenerator
+        from pathlib import Path as _P
 
         self.collector = MarketDataCollector()
         self.analyst = NewsAnalyst()
         self.world_model = WorldModel()
         self.gnn = GNNPredictor()
+
+        # ── v3 propagation engine ──
+        self.edge_policy   = EdgeTypePolicy.from_world_model(self.world_model)
+        self.graph_sanitizer = GraphSanitizer(self.world_model)
+        self.temporal_decay  = TemporalDecay(edge_policy=self.edge_policy)
+        self._calibrator   = TGATCalibrator.load(
+            _P(__file__).parent / "checkpoints" / "tgat_calibrator.pkl"
+        )
+        self._sanitizer_runs_today: bool = False  # cron-like guard
+
+        # path-ranker / plausibility / explanation-generator are rebuilt per run
+        # because they depend on the live snapshot (HubPenalty.fit) and on the
+        # latest Talan profile.
+        self._PathRanker = PathRanker
+        self._HubPenalty = HubPenalty
+        self._PlausibilityScorer = PlausibilityScorer
+        self._ExplanationGenerator = ExplanationGenerator
 
     def run(self, extra_keywords: Optional[List[str]] = None) -> Dict[str, Any]:
         """Execute the full pipeline. Returns a summary dict."""
@@ -110,9 +136,9 @@ class MarketAnalysisPipeline:
             # ── Step 2: Analyse ────────────────────────────────────────────────
             logger.info("Pipeline %s — Step 2: Analysing %d new articles",
                         run_id, collect_result.articles_new)
-            unanalysed = self.collector.get_unanalysed_articles(limit=20)
+            unanalysed = self.collector.get_unanalysed_articles(limit=10)
             analyses, failed = self.analyst.analyse_batch(
-                unanalysed, delay_between_calls=2.0
+                unanalysed, delay_between_calls=12.0
             )
             if failed:
                 errors.append(f"Analyst failed on {len(failed)} articles")
@@ -137,24 +163,106 @@ class MarketAnalysisPipeline:
                 ids = [str(r["id"]) for r in unsynced_ids]
                 self.analyst.mark_kg_synced(ids)
 
+            # ── Step 3.5: KG hygiene (low-conf prune, dup collapse, hub flag) ─
+            # Cheap to run; cron-style guard prevents running it more than once
+            # per process-day. The GraphSanitizer is idempotent so re-running
+            # is safe but pointless.
+            try:
+                if not self._sanitizer_runs_today:
+                    self.graph_sanitizer.run(dry_run=False)
+                    self._sanitizer_runs_today = True
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("GraphSanitizer skipped: %s", exc)
+
             # ── Step 4: GNN Inference ─────────────────────────────────────────
             logger.info("Pipeline %s — Step 4: GNN inference", run_id)
             gnn_result = None
             try:
-                kg_snapshot = self.world_model.get_snapshot("Talan", hops=2)
+                # Restrict snapshot to causal + structural relations only —
+                # MENTIONS-into-hubs noise is the main cause of bad paths.
+                kg_snapshot = self.world_model.get_snapshot(
+                    "Talan",
+                    hops=3,
+                    rel_whitelist=[
+                        "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
+                        "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
+                        "SERVES_SECTOR", "OPERATES_BU", "BU_SERVES",
+                        "BU_DEPENDS_ON", "MENTIONS",
+                    ],
+                )
                 price_data = self.collector.fetch_price_snapshot()
-                gnn_result = self.gnn.predict(
+                # Build entity_title_map: entity_name → article headline
+                # Combines current-run analyses (Pydantic) + DB history (dicts)
+                entity_title_map: dict = {}
+
+                def _etm_from_pydantic(analysis_list):
+                    for a in analysis_list:
+                        title = getattr(a, "article_title", "") or ""
+                        for ent in (getattr(a, "entities", None) or []):
+                            name = getattr(ent, "name", None) or (
+                                ent.get("name") if isinstance(ent, dict) else None
+                            )
+                            if name and title and name not in entity_title_map:
+                                entity_title_map[name] = title
+
+                def _etm_from_dicts(rows):
+                    for row in rows:
+                        title = row.get("article_title") or ""
+                        entities = row.get("entities") or []
+                        if isinstance(entities, str):
+                            import json as _json
+                            try:
+                                entities = _json.loads(entities)
+                            except Exception:
+                                entities = []
+                        for ent in entities:
+                            name = (ent.get("name") if isinstance(ent, dict) else None)
+                            if name and title and name not in entity_title_map:
+                                entity_title_map[name] = title
+
+                _etm_from_pydantic(analyses)
+                recent_for_gnn = self.analyst.get_recent_analyses(hours=72, limit=50)
+                _etm_from_dicts(recent_for_gnn)
+
+                trigger_event = (analyses[0].event_summary if analyses
+                                 else (recent_for_gnn[0].get("event_summary", "periodic_scan")
+                                       if recent_for_gnn else "periodic_scan"))
+                kg_snapshot["entity_title_map"] = entity_title_map
+                logger.info("GNN entity_title_map: %d entries", len(entity_title_map))
+
+                # Build the v3 ranking pipeline from the *current* snapshot.
+                hub_penalty = self._HubPenalty.fit(
+                    kg_snapshot,
+                    pagerank=self.world_model.get_pagerank(top_n=200),
+                )
+                talan_profile = self.world_model.get_talan_profile()
+                plausibility = self._PlausibilityScorer(talan_profile=talan_profile, llm_judge=None)
+                path_ranker = self._PathRanker(
+                    hub_penalty=hub_penalty,
+                    temporal_decay=self.temporal_decay,
+                    plausibility_scorer=plausibility,
+                    calibrator=self._calibrator,
+                    edge_policy=self.edge_policy,
+                )
+                explanation_gen = self._ExplanationGenerator(talan_profile=talan_profile)
+
+                gnn_result = self.gnn.predict_v3(
                     kg_snapshot,
                     price_data=price_data,
-                    trigger_event=analyses[0].event_summary if analyses else "periodic_scan",
+                    trigger_event=trigger_event,
+                    edge_policy=self.edge_policy,
+                    path_ranker=path_ranker,
+                    explanation_generator=explanation_gen,
+                    top_k_paths=10,
                 )
                 gnn_ran = True
+                talan_impact = gnn_result.talan_prediction.predicted_impact if gnn_result.talan_prediction else 0
                 logger.info(
                     "Pipeline %s — GNN: Talan impact=%.3f systemic_risk=%.3f",
-                    run_id,
-                    gnn_result.talan_prediction.predicted_impact if gnn_result.talan_prediction else 0,
-                    gnn_result.systemic_risk_score,
+                    run_id, talan_impact, gnn_result.systemic_risk_score,
                 )
+                # Persist GNN score for LSTM forecaster
+                _persist_gnn_score(gnn_result, run_id, engine)
             except Exception as e:
                 errors.append(f"GNN inference failed: {e}")
                 logger.exception("GNN error: %s", e)
@@ -171,7 +279,7 @@ class MarketAnalysisPipeline:
                 kg_nodes=kg_nodes,
                 kg_rels=kg_rels,
             )
-            report_id = report.id if report else None
+            report_id = report.report_id if report else None
 
             # ── Step 6: Notify ────────────────────────────────────────────────
             logger.info("Pipeline %s — Step 6: Dispatching notifications", run_id)
@@ -224,6 +332,38 @@ class MarketAnalysisPipeline:
             "gnn_ran": gnn_ran,
             "report_id": report_id,
         }
+
+
+# ── GNN score persistence ─────────────────────────────────────────────────────
+
+def _persist_gnn_score(gnn_result: Any, pipeline_run_id: str, engine) -> None:
+    """Save one GNN inference result row to market_gnn_scores."""
+    try:
+        tp = gnn_result.talan_prediction
+        hidden = gnn_result.top_hidden_risks or []
+        with Session(engine) as session:
+            row = MarketGNNScore(
+                trigger_event      = gnn_result.trigger_event[:500] if gnn_result.trigger_event else "periodic_scan",
+                talan_impact       = float(tp.predicted_impact) if tp else 0.0,
+                systemic_risk      = float(gnn_result.systemic_risk_score),
+                talan_confidence   = float(tp.confidence) if tp else 0.0,
+                hidden_risks_count = len(hidden),
+                top_hidden_risks   = [
+                    {"name": r.entity_name, "impact": r.predicted_impact}
+                    for r in hidden
+                ],
+                all_predictions    = [
+                    {"name": p.entity_name, "impact": p.predicted_impact,
+                     "hops": p.propagation_hops, "hidden": p.hidden_risk}
+                    for p in (gnn_result.predictions or [])
+                ],
+                pipeline_run_id    = pipeline_run_id,
+            )
+            session.add(row)
+            session.commit()
+            logger.info("GNN score persisted (talan_impact=%.3f)", row.talan_impact)
+    except Exception as e:
+        logger.warning("Failed to persist GNN score: %s", e)
 
 
 # ── Alert generation ──────────────────────────────────────────────────────────
@@ -359,8 +499,8 @@ def _build_report(
                 talan_impact_summary=_build_impact_summary(analyses),
                 recommended_actions=recommended,
                 key_events_json=analyses[:10],
-                alerts_json=[a.model_dump() for a in alerts],
-                gnn_predictions_json=gnn_result.model_dump() if gnn_result else None,
+                alerts_json=[a.model_dump(mode='json') for a in alerts],
+                gnn_predictions_json=gnn_result.model_dump(mode='json') if gnn_result else None,
                 kg_nodes_added=kg_nodes,
                 kg_relations_added=kg_rels,
             )

@@ -1,31 +1,26 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 
-type Theme = 'dark' | 'light';
+/* ── Light-only design system — theme switching removed ──────────────────── */
 
 interface ThemeContextValue {
-  theme: Theme;
-  toggleTheme: () => void;
+  theme: 'light';
+  toggleTheme: () => void;  // no-op — kept for API compatibility
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'dark',
+  theme: 'light',
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem('theme') as Theme) ?? 'dark';
-  });
-
+  /* Always enforce light mode on <html> — removes any stale data-theme attr */
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.removeItem('theme');
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: 'light', toggleTheme: () => {} }}>
       {children}
     </ThemeContext.Provider>
   );

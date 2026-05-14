@@ -1,0 +1,512 @@
+%─────────────────────────────────────────────────────────────────────────────
+% CHAPTER 2 — State of the Art
+% Talan Tunisia — PFE Report
+%─────────────────────────────────────────────────────────────────────────────
+
+\chapter{State of the Art}
+\thispagestyle{fancy}
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Introduction}
+%─────────────────────────────────────────────────────────────────────────────
+
+The Intelligent Enterprise Strategic Assistant sits at the intersection of
+several rapidly evolving research fields: large language models, multi-agent
+AI architectures, retrieval-augmented generation, knowledge representation,
+graph-based reasoning, graph neural networks, and enterprise information
+systems integration. This chapter reviews the state of the art in each of
+these areas, identifies the key contributions that directly inform the design
+of the proposed system, and positions the project relative to existing
+academic and industrial work.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Enterprise Information Systems and the Integration Challenge}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{ERP, CRM, and HR Systems}
+
+Modern enterprises rely on three classes of domain-specialized information
+systems. Enterprise Resource Planning (ERP) systems manage financial flows,
+procurement, and supply chain operations. Customer Relationship Management
+(CRM) platforms centralize sales pipelines, client interactions, and
+commercial opportunities. Human Resource Information Systems (HRIS) handle
+employee records, contracts, skills, leave management, and project
+assignments. While each system excels in its own domain, they are designed
+as independent silos with distinct data models, APIs, and access
+paradigms~\cite{laudon2020mis}.
+
+\subsection{The Fragmentation Problem}
+
+The coexistence of these isolated platforms creates a structural integration
+challenge: cross-domain queries — such as identifying which employees are
+assigned to projects for clients showing declining revenue — require manual
+correlation across systems that share no common semantic layer.
+Enterprise Application Integration (EAI) and more recent data mesh
+architectures~\cite{dehghani2022datamesh} attempt to address data movement
+at the infrastructure level, but they do not provide an intelligent
+interaction surface. Decision-makers are thus left to reconstruct a unified
+view of the organization manually, a process that is slow, error-prone, and
+does not scale with organizational complexity.
+
+\subsection{Text-to-SQL for Natural Language Database Access}
+
+Text-to-SQL research addresses the challenge of translating natural language
+queries into executable SQL statements, enabling non-technical users to
+interrogate relational databases directly. Recent LLM-based approaches have
+demonstrated competitive performance on standard benchmarks such as
+Spider~\cite{yu2018spider} and BIRD~\cite{li2023bird}, showing that
+instruction-tuned models can reliably generate correct SQL across diverse
+schemas when provided with schema context in the prompt. This capability is
+a prerequisite for any conversational assistant that aims to provide
+domain-neutral access to enterprise relational databases.
+
+\subsection{Role-Based Analytics and Dashboards}
+
+Business intelligence research has long recognized that different
+organizational roles require fundamentally different views of the same
+underlying data~\cite{watson2017bi}. An employee, a project manager, and a
+C-suite executive have distinct information needs, decision horizons, and
+risk tolerances. Role-based dashboards — adaptive interfaces that surface
+the most relevant metrics and alerts for a given user profile — have become
+a standard pattern in enterprise analytics. The present system extends this
+concept by combining role-aware visual dashboards with a conversational
+agent layer, allowing users to seamlessly transition between structured
+visualization and natural-language exploration within the same platform.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Large Language Models}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{From Transformers to Foundation Models}
+
+The Transformer architecture, introduced by Vaswani et al.~\cite{vaswani2017attention},
+established the technical foundation for all modern large language models (LLMs).
+By replacing recurrence with self-attention mechanisms, Transformers enabled
+the parallel processing of sequences and the capture of long-range dependencies
+at scale. Subsequent scaling laws demonstrated that model capability improves
+predictably with parameter count and training data volume~\cite{kaplan2020scaling}.
+
+The GPT series~\cite{brown2020gpt3} demonstrated that sufficiently large models,
+trained on diverse text corpora, acquire broad task-solving abilities without
+explicit fine-tuning — a property termed \textit{in-context learning}. This
+breakthrough established the \textbf{foundation model} paradigm, in which a
+single pre-trained model serves as the basis for a wide range of downstream
+applications through prompting, instruction tuning, or parameter-efficient
+adaptation~\cite{bommasani2021foundation}.
+
+\subsection{Reasoning and Tool Use}
+
+Despite their generative power, early LLMs suffered from factual
+hallucinations and limited step-by-step reasoning. Chain-of-thought
+prompting~\cite{wei2022chainofthought} addressed the latter by instructing
+models to verbalize intermediate reasoning steps before producing a final
+answer, yielding substantial gains on complex arithmetic and commonsense
+tasks.
+
+The ReAct framework~\cite{yao2023react} further extended this capability by
+interleaving reasoning traces with tool-calling actions, enabling LLMs to
+interact with external environments — search engines, calculators, databases —
+in a controlled loop. This \textit{reason-then-act} paradigm is the direct
+conceptual precursor to modern AI agent architectures and underlies the
+design of the domain agents in the present system.
+
+\subsection{LLM-Based Task Automation}
+
+Beyond question answering, LLMs have demonstrated the ability to automate
+structured operational tasks by translating natural language intent into
+concrete actions: filling forms, drafting documents, generating reports, and
+managing calendar or workflow entries~\cite{shen2023hugginggpt}. This
+capability is particularly relevant in enterprise settings, where repetitive
+tasks such as leave request processing, email drafting, and meeting
+preparation consume significant managerial time. By embedding task automation
+directly into the agent layer, AI assistants can serve as active operational
+collaborators rather than passive information retrieval systems.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Multi-Agent AI Architectures}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Foundations of AI Agents}
+
+An AI agent is an autonomous software component that perceives its
+environment through context (user messages, tool results, conversation
+history), reasons over it via an LLM, and executes actions through a set of
+registered tools. The \textit{Reflexion} framework~\cite{shinn2023reflexion}
+demonstrated that agents capable of verbal self-reflection on past failures
+achieve markedly higher task completion rates, introducing the notion of
+\textit{episodic memory} at the agent level.
+
+\subsection{Multi-Agent Orchestration}
+
+Complex enterprise tasks — those requiring simultaneous access to HR, CRM,
+ERP, and market data — exceed the reliable scope of a single agent.
+Multi-agent systems address this by decomposing complexity: a central
+orchestrator interprets user intent and delegates subtasks to specialized
+agents, each equipped with domain-specific tools and knowledge.
+Park et al.~\cite{park2023generative} showed that collections of LLM-backed
+agents can sustain coherent behavior and emergent collaboration dynamics,
+providing theoretical grounding for agent cooperation in organizational
+simulations.
+
+AutoGen~\cite{wu2023autogen} demonstrated that conversational multi-agent
+frameworks, in which agents communicate by exchanging structured messages,
+can solve complex multi-step tasks across domains without hardcoded
+workflows. This contrasts with earlier approaches that relied on
+pre-specified agent graphs with fixed topologies and no dynamic routing.
+
+\subsection{LangGraph for Stateful Agent Orchestration}
+
+LangGraph~\cite{langgraph2024} extends the LangChain ecosystem with a
+graph-based execution model in which agents and tools are nodes, and
+conditional transitions define the control flow. Unlike linear chains,
+LangGraph natively supports cycles, branching, and shared state
+persistence — properties essential for multi-turn conversations that span
+multiple domains. Its explicit state machine semantics allow for
+deterministic routing of user intent to the appropriate domain agent, as
+well as cross-domain orchestration when queries require evidence from more
+than one enterprise system. In the present project, LangGraph serves as the
+central orchestration engine binding the HR, CRM, ERP, Market Analysis,
+and Competitive Intelligence agents into a coherent, stateful assistive
+system.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Retrieval-Augmented Generation}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Motivation and Principle}
+
+LLMs encode world knowledge in their parameters during training, but this
+knowledge is static: it cannot reflect organizational documents, internal
+policies, or events that post-date the training cut-off. Retrieval-Augmented
+Generation (RAG), introduced by Lewis et al.~\cite{lewis2020rag}, resolves
+this limitation by dynamically retrieving relevant passages from an external
+corpus at inference time and injecting them into the model's context window.
+The model can then ground its response in retrieved evidence rather than
+relying solely on parametric memory, substantially reducing hallucinations
+on knowledge-intensive tasks.
+
+\subsection{Retrieval Pipeline}
+
+A standard RAG pipeline comprises three stages~\cite{gao2023rag}:
+
+\begin{enumerate}
+  \item \textbf{Indexing.} Source documents are segmented into chunks,
+        encoded into dense vector representations by an embedding model,
+        and stored in a vector database alongside metadata.
+  \item \textbf{Retrieval.} At query time, the user question is embedded
+        using the same model, and the $k$ most semantically similar chunks
+        are retrieved by approximate nearest-neighbor search.
+  \item \textbf{Generation.} The retrieved passages are prepended to the
+        prompt, providing the LLM with factual context from which to
+        synthesize a grounded, cited response.
+\end{enumerate}
+
+\textbf{Hybrid search} — combining dense cosine similarity with sparse BM25
+lexical scoring~\cite{robertson2009bm25} — has been shown to outperform
+either method alone, particularly when queries contain specific technical
+terms or identifiers that semantic embeddings may dilute. In the present
+system, hybrid search is applied over the corpus of internal documents
+(company policies, procedures, and reports) to maximize retrieval recall
+for employee and manager queries about organizational rules and guidelines.
+
+\subsection{Advanced RAG Patterns}
+
+Beyond the vanilla pipeline, several extensions have proven effective in
+enterprise settings~\cite{gao2023rag}. \textit{Contextual compression}
+filters retrieved passages to retain only sentences relevant to the query,
+reducing context noise. \textit{Reranking} applies a cross-encoder model
+to reorder the initial retrieval results by relevance before generation.
+\textit{Self-RAG}~\cite{asai2023selfrag} introduces a reflective mechanism
+in which the model decides when retrieval is needed and critiques its own
+retrieved evidence, improving both efficiency and faithfulness. These
+patterns collectively inform the RAG module design of the present system,
+where retrieval is triggered selectively based on the nature of the user's
+query.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Knowledge Graphs}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Definition and Structure}
+
+A knowledge graph (KG) is a directed, labeled graph in which nodes represent
+entities (persons, organizations, products, events) and edges represent typed
+relationships between them~\cite{hogan2021knowledge}. Formally, a KG is a
+set of subject–predicate–object triples $(s, p, o)$, optionally annotated
+with provenance metadata. This structure enables multi-hop reasoning:
+inferring facts that are not explicitly stored by traversing chains of
+relationships across the graph. Enterprise KGs model the company's
+operational reality — who works on what project, which client is in which
+sector, which financial indicator correlates with which business outcome —
+in a form that is both machine-queryable and human-interpretable~\cite{noy2019industry}.
+
+\subsection{Graph Databases: Neo4j}
+
+Neo4j~\cite{neo4j2024} is the leading native graph database, storing data
+as nodes and typed relationships with properties, and exposing them through
+the Cypher query language. Its architecture is optimized for
+traversal-heavy queries — such as finding the shortest impact path between
+a market event and a set of affected projects — that would require costly
+multi-join operations in a relational model. In the present system, Neo4j
+hosts the enterprise knowledge graph, connecting HR, CRM, and ERP entities
+with external market events to enable cross-domain reasoning, world model
+visualization, and impact propagation analysis.
+
+\subsection{Temporal Knowledge Graphs}
+
+Standard knowledge graphs represent a static snapshot of the world. Temporal
+knowledge graphs (TKGs) extend this model by associating facts with time
+intervals or timestamps: $(s, p, o, t)$, allowing the graph to encode the
+evolution of relationships and events over time~\cite{trivedi2019dyrep}.
+TKGs are particularly relevant for market intelligence applications, where
+the chronological ordering of events — a competitor's product launch,
+a regulatory announcement, a market downturn — determines their causal
+interpretation and strategic significance. In the present system, the
+knowledge graph is enriched with temporally annotated market events, enabling
+the GNN propagation layer to reason about the sequential impact of external
+signals on the enterprise's internal network.
+
+\subsection{Interactive Graph Visualization and World Models}
+
+Graph visualization tools such as D3.js and Cytoscape.js enable interactive
+exploration of complex entity-relationship networks directly in the browser.
+The concept of an enterprise \textit{world model} — a unified,
+graph-based representation of all the organization's actors, processes,
+assets, and their interrelationships — has been proposed as a foundation
+for organizational situational awareness~\cite{noy2019industry}. By
+rendering this graph interactively, users can navigate between internal
+entities (employees, projects, clients) and external market entities
+(competitors, sectors, events) within a single visual canvas, revealing
+structural dependencies that tabular reports cannot expose.
+
+\subsection{GraphRAG}
+
+GraphRAG~\cite{edge2024graphrag}, proposed by Microsoft Research, extends
+standard RAG by grounding LLM responses in a structured knowledge graph
+rather than raw document chunks. Entity-centric retrieval traverses graph
+neighborhoods to surface relational context — co-workers, past projects,
+client history — that flat vector search cannot capture. This approach is
+particularly valuable in enterprise settings where the relationships between
+entities, not just isolated documents, carry the most strategic information.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Graph Neural Networks for Enterprise Intelligence}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Graph Convolutional Networks}
+
+Graph Neural Networks (GNNs) generalize deep learning to graph-structured
+data by learning node representations through iterative message passing:
+each node aggregates feature vectors from its neighbors, enabling the model
+to capture structural patterns at increasing scales~\cite{kipf2017gcn}.
+The Graph Convolutional Network (GCN) by Kipf and Welling~\cite{kipf2017gcn}
+formalized this spectral approach and achieved strong performance on
+semi-supervised node classification tasks.
+
+\subsection{Graph Attention Networks}
+
+Graph Attention Networks (GAT)~\cite{velickovic2018gat} introduced
+attention-weighted aggregation, allowing each node to assign learned
+importance scores to its neighbors rather than treating all edges equally.
+This is particularly relevant in heterogeneous enterprise graphs where
+some relationships — a client responsible for a significant share of revenue,
+a key employee bridging multiple strategic projects — are far more
+consequential than others and should contribute more heavily to impact
+estimates.
+
+\subsection{Inductive Learning with GraphSAGE}
+
+GraphSAGE~\cite{hamilton2017graphsage} addressed the scalability limitation
+of transductive GNNs by learning aggregation functions that generalize to
+unseen nodes — a critical property in a dynamic enterprise graph where new
+employees, clients, and market events are continuously added. In the present
+project, GNN-based propagation is applied to the temporal knowledge graph
+to assess how external market signals (competitor announcements, sectoral
+downturns, regulatory changes) cascade through the organization's network
+of clients, projects, and human resources, producing quantified risk scores
+and opportunity indicators for strategic decision-makers.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Market Intelligence and Competitive Analysis}
+%─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Competitive Intelligence as a Discipline}
+
+Competitive intelligence (CI) is the systematic process of collecting,
+analyzing, and distributing actionable information about the competitive
+environment to support strategic decision-making~\cite{gilad1989ci,
+porter1980competitive}. The field has evolved from manual desk research to
+automated signal collection from digital sources: websites, social media,
+job postings, financial filings, patents, and news feeds. Modern CI platforms
+such as Crayon and Klue~\cite{crayon2024} aggregate these signals into
+structured feeds, but they typically stop short of linking external events
+to their potential consequences for internal operations, and they do not
+integrate with enterprise data systems.
+
+\subsection{NLP for News Understanding and Event Extraction}
+
+Automatically extracting structured information from unstructured news text
+is a core NLP task with direct applications in market monitoring. Named
+Entity Recognition (NER), Relation Extraction (RE), and Event Detection
+pipelines can identify actors, actions, dates, and affected entities in
+financial and business news~\cite{devlin2019bert}. LLM-based approaches
+have substantially simplified this pipeline: rather than training
+specialized extractors, a prompted LLM can parse a news article and output
+a structured record describing the event type, entities involved, temporal
+context, and assessed business significance~\cite{wei2022chainofthought}.
+This approach is used in the present system to convert raw news feeds into
+structured entries in the temporal knowledge graph.
+
+\subsection{Job Market Signals as Competitive Indicators}
+
+Competitor job postings have emerged as a reliable leading indicator of
+strategic intent~\cite{burning2023jobsignals}. A company hiring aggressively
+in a new geographic region, technology domain, or business function signals
+expansion plans that may not yet be reflected in public announcements. By
+monitoring and analyzing job posting patterns, competitive intelligence
+systems can detect strategic pivots, capability investments, and potential
+competitive threats weeks or months before they materialize in the market.
+The Competitive Intelligence Agent in the present system incorporates job
+signal monitoring as one of its primary data streams alongside news and
+press releases.
+
+\subsection{Linking Market Events to Internal Operations}
+
+A key differentiator of the present system — and a gap in the existing
+literature — is the propagation of external signals through the enterprise
+knowledge graph to assess their downstream operational impact. While prior
+work has studied market event extraction~\cite{ding2014event} and
+portfolio-level financial risk propagation~\cite{acemoglu2012cascade}, the
+problem of estimating how a specific external event (a competitor winning
+a major contract, an economic downturn in a target sector) affects an
+individual organization's projects, workforce allocation, and client
+relationships has received limited systematic attention. The present system
+addresses this gap by combining GNN-based propagation on the temporal
+enterprise knowledge graph with LLM-based causal reasoning and
+natural-language recommendation generation.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{LLMs and Knowledge Graphs: Complementary Paradigms}
+%─────────────────────────────────────────────────────────────────────────────
+
+Pan et al.~\cite{pan2023llmkg} provided a systematic analysis of the
+complementarity between LLMs and knowledge graphs: LLMs bring flexible
+natural-language understanding and generative synthesis, while KGs provide
+structured, verifiable, and continuously updatable factual grounding.
+Three integration modes were identified: (1)~\textit{KG-enhanced LLMs},
+where graph-retrieved facts are injected into the LLM context to ground
+responses; (2)~\textit{LLM-enhanced KGs}, where language models assist in
+KG construction, completion, and enrichment from unstructured sources;
+and (3)~\textit{synergistic pipelines} that iterate between both. The
+present system employs all three modes: the enterprise KG grounds agent
+responses (mode~1), LLM-based extraction from news and documents
+continuously enriches the KG (mode~2), and the market analysis pipeline
+iterates between LLM analysis and graph updates to progressively refine
+the world model (mode~3).
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Project Positioning}
+%─────────────────────────────────────────────────────────────────────────────
+
+Table~\ref{tab:sota_positioning} positions the present project relative to
+the main research threads reviewed in this chapter.
+
+\begin{table}[H]
+\centering
+\caption{Positioning of the proposed system relative to the state of the art}
+\label{tab:sota_positioning}
+\renewcommand{\arraystretch}{1.4}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|p{4.5cm}|p{5cm}|p{6cm}|}
+\hline
+\textbf{Research area}
+  & \textbf{Representative work}
+  & \textbf{Use in the proposed system} \\
+\hline
+LLM reasoning \& tool use
+  & ReAct \cite{yao2023react}, CoT \cite{wei2022chainofthought}
+  & Domain agents reason and call SQL/graph/API tools in a ReAct loop \\
+\hline
+LLM task automation
+  & HuggingGPT \cite{shen2023hugginggpt}
+  & Agents automate leave management, email drafting, and report generation \\
+\hline
+Multi-agent orchestration
+  & AutoGen \cite{wu2023autogen}, LangGraph \cite{langgraph2024}
+  & LangGraph orchestrator routes queries to HR/CRM/ERP/Market/CI agents \\
+\hline
+Retrieval-Augmented Generation
+  & Lewis et al. \cite{lewis2020rag}, Self-RAG \cite{asai2023selfrag}
+  & Hybrid RAG over internal policies and documents via ChromaDB \\
+\hline
+Knowledge graphs
+  & Hogan et al. \cite{hogan2021knowledge}, GraphRAG \cite{edge2024graphrag}
+  & Neo4j enterprise KG linking HR, CRM, ERP, and external market entities \\
+\hline
+Temporal knowledge graphs
+  & Trivedi et al. \cite{trivedi2019dyrep}
+  & Temporally annotated KG tracking market event sequences \\
+\hline
+World model visualization
+  & Noy et al. \cite{noy2019industry}
+  & Interactive graph canvas mapping internal and external entities \\
+\hline
+Graph Neural Networks
+  & GCN \cite{kipf2017gcn}, GAT \cite{velickovic2018gat}, GraphSAGE \cite{hamilton2017graphsage}
+  & GNN-based propagation to assess market event impact on internal operations \\
+\hline
+LLM + KG integration
+  & Pan et al. \cite{pan2023llmkg}
+  & Bidirectional enrichment: KG grounds agents; LLMs enrich KG from news \\
+\hline
+Competitive intelligence
+  & Gilad \& Gilad \cite{gilad1989ci}, Crayon \cite{crayon2024}
+  & CI Agent monitors news, job postings, and competitor signals \\
+\hline
+Job signal monitoring
+  & Burning Glass \cite{burning2023jobsignals}
+  & Competitor hiring trends used as leading strategic indicators \\
+\hline
+Enterprise data integration
+  & Laudon \& Laudon \cite{laudon2020mis}, Text-to-SQL \cite{yu2018spider}
+  & Natural language access to ERP, CRM, and HR relational databases \\
+\hline
+Role-based dashboards
+  & Watson \cite{watson2017bi}
+  & Role-adaptive dashboards for employee, manager, and executive direction \\
+\hline
+\end{tabular}%
+}
+\end{table}
+
+The proposed system distinguishes itself from prior art on four axes.
+First, it is the only platform to unify HR, CRM, and ERP domains through
+a single multi-agent architecture accessible via natural language, while
+simultaneously grounding responses in internal policy documents through RAG.
+Second, it links external market intelligence directly to internal operational
+data through temporal knowledge graph construction and GNN-based signal
+propagation, enabling a form of strategic situational awareness that neither
+enterprise AI assistants nor dedicated competitive intelligence platforms
+currently provide. Third, its world model visualization bridges the gap
+between raw data and strategic comprehension by rendering the enterprise's
+full entity-relationship network as an interactive, navigable graph.
+Fourth, its architecture is vendor-agnostic and open, built on interoperable
+components (FastAPI, LangGraph, Neo4j, ChromaDB, PostgreSQL, React) rather
+than on a single vendor's closed ecosystem.
+
+%─────────────────────────────────────────────────────────────────────────────
+\section{Conclusion}
+%─────────────────────────────────────────────────────────────────────────────
+
+This chapter reviewed the theoretical and technological foundations underpinning
+the Intelligent Enterprise Strategic Assistant. Large language models endowed
+with tool use and chain-of-thought reasoning provide the generative backbone;
+LangGraph's stateful orchestration enables reliable multi-agent coordination
+across enterprise domains; hybrid RAG grounds responses in internal
+organizational knowledge; and the temporal Neo4j enterprise knowledge graph,
+enriched continuously by LLM-based extraction and GNN-based propagation,
+connects internal operational entities to external market dynamics. Together,
+these building blocks define a coherent technical foundation that no existing
+system combines in full. The next chapter presents the system requirements,
+the chosen architecture, and the justification of each technology decision
+at every layer of the platform.

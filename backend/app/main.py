@@ -88,6 +88,28 @@ async def lifespan(_app: FastAPI):
     async with engine_erp.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=_tables_for("erp_"))
 
+    # ── Default admin user seed ───────────────────────────────────────────────
+    try:
+        from sqlalchemy import select
+        from app.models.user_models import User, Role
+        from app.core.security import hash_password
+        async with engine_hr.connect() as conn:
+            result = await conn.execute(select(User).where(User.email == "admin@talan.com"))
+            if result.first() is None:
+                await conn.execute(
+                    User.__table__.insert().values(
+                        email="admin@talan.com",
+                        hashed_password=hash_password("admin1234"),
+                        full_name="Admin Talan",
+                        role=Role.admin,
+                        is_active=True,
+                    )
+                )
+                await conn.commit()
+                logger.info("Default admin user created: admin@talan.com / admin1234")
+    except Exception as exc:
+        logger.warning("Could not seed default admin: %s", exc)
+
     # ── APScheduler — nightly Neo4j sync at 02:00 ─────────────────────────────
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -128,6 +150,32 @@ async def lifespan(_app: FastAPI):
         logger.warning("MarketAnalysisOrchestrator not started: %s", exc)
         market_orchestrator = None  # type: ignore[assignment]
 
+    # ── RAG index — load and embed documents from data/documents/ ─────────────
+    try:
+        import asyncio
+        from app.agents.rag_agent import index_documents
+        await asyncio.to_thread(index_documents)
+        logger.info("RAG index ready")
+    except Exception as exc:
+        logger.warning("RAG index not loaded: %s", exc)
+
+    # ── Competitive Intelligence Scanner — autonomous watchlist monitor ────────
+    try:
+        from app.services.competitive_intel.scanner import CompetitiveIntelScanner
+        from app.models.competitive_intel_models import CompetitorSnapshot, CompetitorAlert as CIAlert
+        # Create CI tables in hr DB
+        async with engine_hr.begin() as conn:
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[CompetitorSnapshot.__table__, CIAlert.__table__],
+            )
+        ci_scanner = CompetitiveIntelScanner.get_instance()
+        ci_scanner.start()
+        logger.info("CompetitiveIntelScanner started — watching %d competitors", 7)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("CompetitiveIntelScanner not started: %s", exc)
+        ci_scanner = None  # type: ignore[assignment]
+
     yield
 
     if scheduler and scheduler.running:
@@ -135,6 +183,9 @@ async def lifespan(_app: FastAPI):
 
     if market_orchestrator:
         market_orchestrator.stop()
+
+    if ci_scanner:
+        ci_scanner.stop()
 
 
 # ── Application ───────────────────────────────────────────────────────────────

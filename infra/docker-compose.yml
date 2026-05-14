@@ -103,6 +103,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ../backend:/app                 # live code mount — no rebuild needed for .py changes
       - ../data:/app/data:ro
     depends_on:
       postgres:

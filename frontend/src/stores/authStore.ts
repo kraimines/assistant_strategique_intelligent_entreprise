@@ -14,16 +14,9 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: {
-        id: '1',
-        email: 'ines@talan.com',
-        first_name: 'Ines',
-        last_name: 'Kraim',
-        role: 'admin' as Role,
-        token: 'dev-token',
-      },
-      token: 'dev-token',
-      isAuthenticated: true,
+      user: null,
+      token: null,
+      isAuthenticated: false,
 
       login: (user: User) => {
         set({ user, token: user.token, isAuthenticated: true });
@@ -40,7 +33,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'talan-auth',
+      name: 'talan-auth-v2',
       partialize: (state) => ({
         user: state.user,
         token: state.token,

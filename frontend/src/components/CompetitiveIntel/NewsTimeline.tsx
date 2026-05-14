@@ -3,9 +3,7 @@ import { motion } from 'framer-motion';
 import type { NewsArticle } from '../../api/competitiveIntelApi';
 import GlassCard from '../ui/GlassCard';
 
-interface Props {
-  articles: NewsArticle[];
-}
+interface Props { articles: NewsArticle[] }
 
 function parseDate(raw: string): string {
   if (!raw) return '';
@@ -18,23 +16,21 @@ function parseDate(raw: string): string {
   }
 }
 
-const COMPANY_COLORS: Record<string, string> = {
-  default: '#00d4ff',
-};
-
+const PALETTE = ['#3B82F6', '#7C3AED', '#EA580C', '#059669', '#DB2777'];
 function companyColor(company?: string): string {
-  if (!company) return COMPANY_COLORS.default;
-  const colors = ['#00d4ff', '#7c3aed', '#f97316', '#22c55e', '#e879f9'];
+  if (!company) return '#3B82F6';
   let hash = 0;
   for (const ch of company) hash = (hash * 31 + ch.charCodeAt(0)) & 0xffff;
-  return colors[hash % colors.length];
+  return PALETTE[hash % PALETTE.length];
 }
 
 export default function NewsTimeline({ articles }: Props) {
   if (!articles.length) {
     return (
       <GlassCard animate className="p-5 flex items-center justify-center h-full min-h-[200px]">
-        <p className="text-white/30 text-sm">Aucune actualité trouvée.</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-faint)' }}>
+          Aucune actualité trouvée.
+        </p>
       </GlassCard>
     );
   }
@@ -42,72 +38,93 @@ export default function NewsTimeline({ articles }: Props) {
   return (
     <GlassCard animate className="p-5 flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <Newspaper size={15} className="text-cyber-cyan" />
-        <h3 className="text-white font-semibold text-sm">
+        <Newspaper size={16} style={{ color: 'var(--primary)' }} />
+        <h3 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
           Actualités récentes
-          <span className="ml-2 text-white/40 font-normal">({articles.length})</span>
+          <span className="ml-2 text-sm font-normal" style={{ color: 'var(--text-faint)' }}>
+            ({articles.length})
+          </span>
         </h3>
       </div>
 
-      <div className="flex flex-col gap-3 overflow-y-auto max-h-[420px] pr-1">
-        {articles.map((article, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.04 }}
-            className="flex gap-3 p-3 rounded-xl bg-white/3 border border-white/6 hover:border-white/12 hover:bg-white/5 transition-all group"
-          >
-            {/* Company color dot */}
-            <div
-              className="w-1.5 flex-shrink-0 rounded-full mt-1 self-stretch"
-              style={{ background: companyColor(article.company), opacity: 0.8 }}
-            />
+      <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[420px] pr-1">
+        {articles.map((article, i) => {
+          const color = companyColor(article.company);
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className="flex gap-3 p-3.5 rounded-2xl transition-all"
+              style={{
+                background: 'var(--bg-base)',
+                border: '1px solid var(--border-subtle)',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-strong)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-subtle)';
+              }}
+            >
+              <div className="w-1 flex-shrink-0 rounded-full self-stretch" style={{ background: color }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                    {article.title}
+                  </p>
+                  {article.url && (
+                    <a
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 transition-colors"
+                      style={{ color: 'var(--text-faint)' }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLAnchorElement).style.color = 'var(--primary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-faint)';
+                      }}
+                    >
+                      <ExternalLink size={13} />
+                    </a>
+                  )}
+                </div>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-white/85 text-xs font-medium leading-snug line-clamp-2">
-                  {article.title}
-                </p>
-                {article.url && (
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/20 hover:text-cyber-cyan flex-shrink-0 transition-colors"
-                  >
-                    <ExternalLink size={12} />
-                  </a>
+                {article.summary && (
+                  <p className="text-xs leading-relaxed mt-1 line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                    {article.summary}
+                  </p>
                 )}
-              </div>
 
-              {article.summary && (
-                <p className="text-white/40 text-[11px] mt-1 line-clamp-2 leading-relaxed">
-                  {article.summary}
-                </p>
-              )}
-
-              <div className="flex items-center gap-2 mt-2">
-                {article.company && (
-                  <span
-                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-md"
-                    style={{
-                      color: companyColor(article.company),
-                      background: `${companyColor(article.company)}18`,
-                      border: `1px solid ${companyColor(article.company)}30`,
-                    }}
-                  >
-                    {article.company}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {article.company && (
+                    <span
+                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      style={{
+                        color,
+                        background: `${color}14`,
+                        border: `1px solid ${color}30`,
+                      }}
+                    >
+                      {article.company}
+                    </span>
+                  )}
+                  {article.source && (
+                    <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                      {article.source}
+                    </span>
+                  )}
+                  <span className="text-xs ml-auto" style={{ color: 'var(--text-faint)' }}>
+                    {parseDate(article.published)}
                   </span>
-                )}
-                <span className="text-white/25 text-[10px]">{article.source}</span>
-                <span className="text-white/20 text-[10px] ml-auto">
-                  {parseDate(article.published)}
-                </span>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
     </GlassCard>
   );

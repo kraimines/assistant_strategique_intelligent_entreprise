@@ -472,6 +472,38 @@ Réponse :
   ]
 }}
 
+--- Exemple EMAIL 4 (envoi email avec chiffre d'affaires — TOUJOURS crm) ---
+Question : "Envoie un mail à ines.kraim@essai.ucar.tn en lui envoyant notre chiffre d'affaires."
+Réponse :
+{{
+  "domain": "crm",
+  "primary_domain": "crm",
+  "secondary_domain": null,
+  "confidence": 0.95,
+  "requires_write": false,
+  "requires_email": true,
+  "requires_report": false,
+  "intent_summary": "Récupération du chiffre d'affaires (crm_revenue_history) et envoi par email à ines.kraim@essai.ucar.tn.",
+  "entities_detected": [
+    {{"type": "document", "id": null, "name": "ines.kraim@essai.ucar.tn"}}
+  ]
+}}
+
+--- Exemple EMAIL 5 (email avec données RH) ---
+Question : "Envoie un email à rh@talan.com avec la liste des employés en congé cette semaine."
+Réponse :
+{{
+  "domain": "hr",
+  "primary_domain": "hr",
+  "secondary_domain": null,
+  "confidence": 0.96,
+  "requires_write": false,
+  "requires_email": true,
+  "requires_report": false,
+  "intent_summary": "Récupération des congés de la semaine et envoi par email à rh@talan.com.",
+  "entities_detected": []
+}}
+
 --- Exemple RAPPORT 1 (rapport RH) ---
 Question : "Génère un rapport mensuel des congés de l'équipe."
 Réponse :

@@ -65,7 +65,7 @@ def index_documents() -> None:
     global _chroma_client, _embedding_fn, _bm25_indexes, _corpus_docs
 
     # ── Resolve documents directory ───────────────────────────────────────────
-    docs_dir = Path("./data/documents")
+    docs_dir = Path(__file__).resolve().parents[2] / "data" / "documents"
     if not docs_dir.exists():
         logger.warning(
             "rag_agent: documents directory '%s' not found — RAG will return empty context",
@@ -76,7 +76,7 @@ def index_documents() -> None:
     # ── Lazy-import heavy dependencies ────────────────────────────────────────
     try:
         import chromadb
-        from langchain_community.document_loaders import PyPDFLoader, TextLoader
+        from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
         from langchain.text_splitter import RecursiveCharacterTextSplitter
         from langchain_community.embeddings import HuggingFaceEmbeddings
         from rank_bm25 import BM25Okapi
@@ -125,7 +125,7 @@ def index_documents() -> None:
             logger.error("rag_agent: failed to create collection '%s' — %s", name, exc)
 
     # ── Load and index documents ───────────────────────────────────────────────
-    supported_extensions = {".pdf", ".md", ".txt"}
+    supported_extensions = {".pdf", ".md", ".txt", ".docx"}
     doc_files = [
         f for f in docs_dir.iterdir()
         if f.is_file() and f.suffix.lower() in supported_extensions
@@ -145,6 +145,8 @@ def index_documents() -> None:
             suffix = doc_path.suffix.lower()
             if suffix == ".pdf":
                 loader = PyPDFLoader(str(doc_path))
+            elif suffix == ".docx":
+                loader = Docx2txtLoader(str(doc_path))
             else:
                 loader = TextLoader(str(doc_path), encoding="utf-8")
 

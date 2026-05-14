@@ -6,6 +6,8 @@ Tables (created in talan_hr DB under schema 'public'):
 - market_alerts         — generated alerts
 - market_reports        — periodic full reports
 - market_pipeline_runs  — audit log of each pipeline execution
+- market_gnn_scores     — time-series of GNN inference scores (for LSTM forecaster)
+- market_recommendations — LLM strategic recommendations from GNN + forecast
 """
 from __future__ import annotations
 
@@ -151,4 +153,45 @@ class MarketPipelineRun(Base):
     __table_args__ = (
         Index("ix_market_pipeline_runs_started_at", "started_at"),
         Index("ix_market_pipeline_runs_status", "status"),
+    )
+
+
+class MarketGNNScore(Base):
+    """One GNN inference result persisted after each pipeline cycle."""
+    __tablename__ = "market_gnn_scores"
+
+    id                  = Column(UUID(as_uuid=False), primary_key=True, default=_gen_uuid)
+    recorded_at         = Column(DateTime, default=datetime.utcnow, nullable=False)
+    trigger_event       = Column(Text, default="periodic_scan")
+    talan_impact        = Column(Float, default=0.0)   # predicted_impact on Talan ∈ [-1,+1]
+    systemic_risk       = Column(Float, default=0.0)   # systemic_risk_score ∈ [0,1]
+    talan_confidence    = Column(Float, default=0.0)
+    hidden_risks_count  = Column(Integer, default=0)
+    top_hidden_risks    = Column(JSON,  default=list)  # [{name, impact}, ...]
+    all_predictions     = Column(JSON,  default=list)  # full predictions list
+    pipeline_run_id     = Column(UUID(as_uuid=False), nullable=True)
+
+    __table_args__ = (
+        Index("ix_market_gnn_scores_recorded_at", "recorded_at"),
+    )
+
+
+class MarketRecommendation(Base):
+    """LLM-generated strategic recommendation from GNN + forecast output."""
+    __tablename__ = "market_recommendations"
+
+    id              = Column(UUID(as_uuid=False), primary_key=True, default=_gen_uuid)
+    generated_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
+    trigger_event   = Column(Text)
+    talan_impact    = Column(Float)
+    systemic_risk   = Column(Float)
+    forecast_7d     = Column(Float, nullable=True)
+    forecast_30d    = Column(Float, nullable=True)
+    recommendations = Column(JSON,  default=list)   # [{title, action, urgency, horizon}, ...]
+    raw_llm_output  = Column(Text)
+    model_used      = Column(String(64))
+    gnn_score_id    = Column(UUID(as_uuid=False), nullable=True)
+
+    __table_args__ = (
+        Index("ix_market_recommendations_generated_at", "generated_at"),
     )

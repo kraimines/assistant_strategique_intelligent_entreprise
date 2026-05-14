@@ -119,6 +119,8 @@ def crm_agent_node(state: AgentState) -> AgentState:
     system_msg = SystemMessage(content=CRM_SYSTEM_PROMPT + _wm_context)
     messages: List[Any] = [system_msg] + list(state.get("messages", []))
 
+    requires_report: bool = bool(state.get("requires_report", False))
+
     # ── Tool-calling ReAct loop ───────────────────────────────────────────────
     for iteration in range(1, MAX_TOOL_ITERATIONS + 1):
         logger.debug("crm_agent_node: LLM invoke iteration %d", iteration)
@@ -208,6 +210,15 @@ def crm_agent_node(state: AgentState) -> AgentState:
 
         # Append tool results to the working message list for next LLM call
         messages.extend(tool_messages)
+
+        # Report mode: skip agent synthesis — final_response_node handles it
+        if requires_report and accumulated_tool_results:
+            logger.info(
+                "crm_agent_node: report mode — skipping synthesis LLM call, "
+                "passing raw tool results to final_response_node"
+            )
+            new_messages.append(ai_response)
+            break
 
         # If this was the last allowed iteration, force a final LLM call
         if iteration == MAX_TOOL_ITERATIONS:

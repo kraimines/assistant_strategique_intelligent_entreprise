@@ -105,10 +105,11 @@ export function useChat() {
               } else if (event.type === 'done') {
                 // Sync conversation_id with whatever the backend confirmed
                 if (event.conversation_id) setConversationId(event.conversation_id);
+                const isReport = Boolean(event.is_report);
                 setMessages((prev) => {
                   const last = prev[prev.length - 1];
                   if (!last?.isStreaming) return prev;
-                  return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+                  return [...prev.slice(0, -1), { ...last, isStreaming: false, isReport }];
                 });
                 setIsStreaming(false);
               } else if (event.type === 'error') {

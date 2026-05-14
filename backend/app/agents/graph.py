@@ -36,7 +36,7 @@ from app.agents.hr_agent import hr_agent_node
 from app.agents.orchestrator import orchestrator_node
 from app.agents.rag_agent import rag_agent_node
 from app.agents.state import AgentState
-from app.core.llm import get_llm, invoke_with_retry
+from app.core.llm import get_text_llm, invoke_with_retry
 from app.prompts.final_response_prompts import FINAL_RESPONSE_PROMPT, REPORT_PROMPT
 from app.services.world_model_service import get_world_model_snapshot
 
@@ -76,11 +76,11 @@ def route_from_orchestrator(state: AgentState) -> str:
     domain: str = (state.get("detected_domain") or "rag").lower()
     requires_email: bool = bool(state.get("requires_email"))
 
-    # Envoi d'email sans données DB : aller directement à email_agent
-    # (pas besoin de passer par rag_agent ni un domain agent)
+    # Envoi d'email avec domaine rag : passer d'abord par rag_agent pour récupérer
+    # le contexte documentaire, puis route_after_rag enverra vers email_agent.
     if requires_email and domain == "rag":
-        logger.debug("route_from_orchestrator: pure email request (domain=rag) → email_agent")
-        return "email_agent"
+        logger.debug("route_from_orchestrator: email+rag request → rag_agent first (then email_agent)")
+        return "rag_agent"
 
     # Domaines qui bénéficient du world model → passer par world_model_node
     if domain in {"hr", "crm", "erp", "multi"}:
@@ -339,7 +339,7 @@ def final_response_node(state: AgentState) -> AgentState:
 
     final_response_text: str
     try:
-        llm = get_llm()
+        llm = get_text_llm()
         response = invoke_with_retry(llm, prompt)
         final_response_text = (
             response.content
@@ -462,6 +462,8 @@ async def run_agent_graph(
     """
     config = {"configurable": {"thread_id": conversation_id}}
 
+    is_report_flag: bool = False
+
     try:
         async for event in graph.astream(state, config=config):
             for node_name, node_output in event.items():
@@ -470,6 +472,7 @@ async def run_agent_graph(
 
                 if node_name == "final_response_node":
                     response_text: str = node_output.get("final_response") or ""
+                    is_report_flag = bool(node_output.get("requires_report", False))
                     if response_text:
                         # Yield in chunks of ~50 chars to simulate token streaming
                         chunk_size = 50
@@ -487,7 +490,7 @@ async def run_agent_graph(
                         )
 
         yield (
-            f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id, 'tokens_used': 0})}\n\n"
+            f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id, 'tokens_used': 0, 'is_report': is_report_flag})}\n\n"
         )
 
     except Exception as exc:

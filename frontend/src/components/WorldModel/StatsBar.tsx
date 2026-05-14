@@ -1,10 +1,11 @@
 /**
  * StatsBar.tsx — Node/link count stats shown in the top header area.
+ * Cold light palette.
  */
 interface Props {
   nodeCount: number;
   linkCount: number;
-  view: string;
+  view:      string;
 }
 
 const VIEW_LABELS: Record<string, string> = {
@@ -18,15 +19,32 @@ const VIEW_LABELS: Record<string, string> = {
 export default function StatsBar({ nodeCount, linkCount, view }: Props) {
   return (
     <div className="flex items-center gap-4">
-      <div className="px-3 py-1 rounded-full text-xs"
-        style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff' }}>
+      {/* Current perspective pill */}
+      <div
+        className="px-3 py-1 rounded-full text-xs font-semibold"
+        style={{
+          background: 'var(--primary-subtle)',
+          border:     '1px solid var(--primary-muted)',
+          color:      'var(--primary-dark)',
+        }}
+      >
         {VIEW_LABELS[view] ?? view}
       </div>
-      <span className="text-xs text-white/30">
-        <span className="text-white/60 font-semibold">{nodeCount}</span> nœuds
+
+      {/* Node count */}
+      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+          {nodeCount}
+        </span>{' '}
+        nœuds
       </span>
-      <span className="text-xs text-white/30">
-        <span className="text-white/60 font-semibold">{linkCount}</span> relations
+
+      {/* Link count */}
+      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
+          {linkCount}
+        </span>{' '}
+        relations
       </span>
     </div>
   );

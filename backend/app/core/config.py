@@ -121,8 +121,29 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
 
-    # ── LLM provider actif : "gemini" | "groq" ───────────────────────────────
+    # ── Anthropic / Claude (structured tool-use extraction) ───────────────────
+    # Optional — if set, the analyst uses Claude 3.5 Sonnet for superior extraction
+    # fallback to Groq if not set
+    anthropic_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("anthropic_api_key", "claude_api_key"),
+    )
+    anthropic_model: str = "claude-3-5-sonnet-20241022"
+
+    # ── Mistral AI (second fallback — 256K context, 500K TPM, no daily cap) ───
+    mistral_api_key: str = ""
+    mistral_model: str = "mistral-large-latest"
+
+    # ── LLM provider actif : "gemini" | "groq" | "anthropic" ─────────────────
     llm_provider: str = "groq"
+
+    # ── Providers par rôle (optimisation quota / performance) ─────────────────
+    # json_llm_provider  : orchestrateur, analyst, scanner → JSON structuré
+    # tool_llm_provider  : agents HR/CRM/ERP/market/competitive → tool calling
+    # text_llm_provider  : email_agent, final_response → génération FR
+    json_llm_provider: str = "groq"
+    tool_llm_provider: str = "groq"
+    text_llm_provider: str = "gemini"
 
     # ── ChromaDB ─────────────────────────────────────────────────────────────
     chroma_persist_dir: str = "./chroma_db"

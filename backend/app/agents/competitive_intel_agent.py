@@ -1,10 +1,20 @@
-"""Competitive Intelligence agent node.
+"""Autonomous Competitive Intelligence agent node.
 
-Implements a tool-calling ReAct loop (up to MAX_TOOL_ITERATIONS rounds) that
-uses the four competitive intelligence tools to scrape public sources and
-synthesize a structured strategic analysis, then stores the result in AgentState.
+Implements a 7-tool ReAct loop (up to MAX_TOOL_ITERATIONS rounds).
+
+Tool usage priority:
+  1. query_stored_intel        — reads PostgreSQL, never scrapes (always first)
+  2. detect_strategic_shift    — temporal delta analysis
+  3. get_competitor_financial_data — yfinance real-time
+  4. get_competitor_kg_context — Neo4j graph context
+  5. scrape_company_news       — live Google News RSS (only when stale)
+  6. scrape_job_postings       — live hiring signals (only when stale)
+  7. analyze_competitive_landscape — synthesis (called after scraping)
+
+The agent is backed by an autonomous scanner (CompetitiveIntelScanner) that
+populates the PostgreSQL knowledge base every 6h. Most conversational answers
+can be served entirely from stored data without live scraping.
 """
-
 from __future__ import annotations
 
 import json
@@ -18,21 +28,30 @@ from app.agents.state import AgentState
 from app.core.llm import get_llm_with_tools, invoke_with_retry, truncate_tool_result
 from app.prompts.competitive_intel_prompts import COMPETITIVE_INTEL_SYSTEM_PROMPT
 from app.tools.competitive_intel_tools import (
+    # Agentic tools — read stored intelligence (no live scraping)
+    query_stored_intel,
+    detect_strategic_shift,
+    get_competitor_financial_data,
+    get_competitor_kg_context,
+    # Live scraping tools — used only when data is stale
     scrape_company_news,
     scrape_job_postings,
-    scrape_company_blog,
     analyze_competitive_landscape,
 )
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ITERATIONS = 4  # slightly higher — scraping needs more steps
+# Higher than other agents — stored queries + live scraping may need more steps
+MAX_TOOL_ITERATIONS = 5
 
 COMPETITIVE_INTEL_TOOLS = [
-    scrape_company_news,
-    scrape_job_postings,
-    scrape_company_blog,
-    analyze_competitive_landscape,
+    query_stored_intel,              # 1 — stored KB (no cost)
+    detect_strategic_shift,          # 2 — temporal delta
+    get_competitor_financial_data,   # 3 — yfinance
+    get_competitor_kg_context,       # 4 — Neo4j
+    scrape_company_news,             # 5 — live (stale only)
+    scrape_job_postings,             # 6 — live (stale only)
+    analyze_competitive_landscape,   # 7 — synthesis
 ]
 
 
@@ -40,35 +59,94 @@ def _build_tools_by_name() -> Dict[str, Any]:
     return {tool.name: tool for tool in COMPETITIVE_INTEL_TOOLS}
 
 
-def competitive_intel_agent_node(state: AgentState) -> AgentState:
-    """Competitive intelligence agent: scrapes public sources and synthesizes
-    a structured strategic analysis via a bounded tool-calling ReAct loop.
+def _build_context_prefix() -> str:
+    """Inject latest watchlist summary into the system prompt as live context.
 
-    Workflow
-    --------
-    1. Bind all competitive intel tools to the LLM.
-    2. Invoke the LLM with the system prompt + conversation history.
-    3. Execute tool calls (scrape_company_news → scrape_job_postings →
-       analyze_competitive_landscape).
-    4. Re-invoke LLM with accumulated tool results.
-    5. Repeat up to MAX_TOOL_ITERATIONS or until no more tool_calls.
-    6. Store the final AIMessage and tool results in AgentState.
+    Fetches the most recent snapshot for each watched company so the LLM
+    starts with awareness of the current threat landscape — not just instructions.
+    Falls back gracefully if the DB is unavailable.
+    """
+    try:
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import Session
+        from app.core.config import settings
+        from functools import lru_cache
+
+        @lru_cache(maxsize=1)
+        def _engine():
+            return create_engine(settings.database_url("hr"), pool_pre_ping=True)
+
+        engine = _engine()
+        with Session(engine) as session:
+            rows = session.execute(
+                text(
+                    "SELECT DISTINCT ON (company_name) "
+                    "company_name, threat_level, threat_label, "
+                    "is_significant, change_summary, snapshot_at "
+                    "FROM ci_snapshots "
+                    "ORDER BY company_name, snapshot_at DESC"
+                )
+            ).fetchall()
+
+        if not rows:
+            return ""
+
+        lines = ["## Current Watchlist Status (from knowledge base)\n"]
+        lines.append("| Company | Threat | Label | Significant | Last scan |")
+        lines.append("|---|---|---|---|---|")
+        for r in rows:
+            sig = "⚠️ YES" if r[3] else "—"
+            lines.append(
+                f"| {r[0]} | {(r[1] or 0):.0%} | {r[2] or '?'} | {sig} | {str(r[5])[:16]} |"
+            )
+
+        # Unacknowledged alerts
+        with Session(engine) as session:
+            alerts = session.execute(
+                text(
+                    "SELECT company_name, level, title FROM ci_alerts "
+                    "WHERE acknowledged = false "
+                    "ORDER BY created_at DESC LIMIT 5"
+                )
+            ).fetchall()
+
+        if alerts:
+            lines.append("\n## Pending Alerts")
+            for a in alerts:
+                lines.append(f"- [{a[1].upper()}] **{a[0]}**: {a[2][:80]}")
+
+        return "\n".join(lines) + "\n\n"
+    except Exception:
+        return ""
+
+
+def competitive_intel_agent_node(state: AgentState) -> AgentState:
+    """Agentic competitive intelligence node.
+
+    Serves queries from the PostgreSQL knowledge base first (no scraping cost).
+    Falls back to live scraping only when data is stale (> 6h) or company
+    is not in the watchlist. Reasons over time (delta detection) and across
+    the Neo4j knowledge graph.
 
     Args:
-        state: Current shared AgentState.
+        state: Shared LangGraph AgentState.
 
     Returns:
-        Updated AgentState with new messages and tool_results populated.
+        Updated AgentState with new messages and tool_results.
     """
     t0 = time.perf_counter()
     user_id = state.get("user_id", "unknown")
     logger.info("competitive_intel_agent_node start — user_id=%s", user_id)
 
+    # ── Build system prompt with live watchlist context ────────────────────────
+    context_prefix = _build_context_prefix()
+    system_content = context_prefix + COMPETITIVE_INTEL_SYSTEM_PROMPT
+
     accumulated_tool_results: Dict[str, Any] = {}
     tools_by_name = _build_tools_by_name()
     new_messages: List[Any] = []
 
-    # ── Bind tools to LLM ────────────────────────────────────────────────────
+    # ── Bind tools ─────────────────────────────────────────────────────────────
     try:
         llm_with_tools = get_llm_with_tools(COMPETITIVE_INTEL_TOOLS)
     except Exception as exc:
@@ -78,20 +156,20 @@ def competitive_intel_agent_node(state: AgentState) -> AgentState:
             "error_message": f"Erreur d'initialisation de l'agent de veille : {exc}",
         }
 
-    system_msg = SystemMessage(content=COMPETITIVE_INTEL_SYSTEM_PROMPT)
-    messages: List[Any] = [system_msg] + list(state.get("messages", []))
+    messages: List[Any] = [
+        SystemMessage(content=system_content)
+    ] + list(state.get("messages", []))
 
-    # ── ReAct loop ────────────────────────────────────────────────────────────
+    # ── ReAct loop ─────────────────────────────────────────────────────────────
     for iteration in range(1, MAX_TOOL_ITERATIONS + 1):
-        logger.debug("competitive_intel_agent_node: LLM iteration %d", iteration)
+        logger.debug("competitive_intel_agent_node: iteration %d/%d", iteration, MAX_TOOL_ITERATIONS)
 
         try:
             t_llm = time.perf_counter()
             ai_response: AIMessage = invoke_with_retry(llm_with_tools, messages)
             logger.debug(
-                "competitive_intel_agent_node: iteration %d — %.1f ms",
-                iteration,
-                (time.perf_counter() - t_llm) * 1000,
+                "competitive_intel_agent_node: iteration %d — %.0fms",
+                iteration, (time.perf_counter() - t_llm) * 1000,
             )
         except Exception as exc:
             logger.exception(
@@ -101,7 +179,7 @@ def competitive_intel_agent_node(state: AgentState) -> AgentState:
                 **state,
                 "messages": new_messages,
                 "tool_results": accumulated_tool_results or None,
-                "error_message": f"Erreur lors de l'analyse de veille : {exc}",
+                "error_message": f"Erreur LLM veille concurrentielle : {exc}",
             }
 
         messages.append(ai_response)
@@ -115,7 +193,7 @@ def competitive_intel_agent_node(state: AgentState) -> AgentState:
             new_messages.append(ai_response)
             break
 
-        # ── Execute tool calls ────────────────────────────────────────────────
+        # ── Execute tool calls ─────────────────────────────────────────────────
         tool_messages: List[ToolMessage] = []
 
         for tool_call in tool_calls:
@@ -133,12 +211,12 @@ def competitive_intel_agent_node(state: AgentState) -> AgentState:
             )
 
             logger.info(
-                "competitive_intel_agent_node: calling tool '%s' args=%s",
+                "competitive_intel_agent_node: tool '%s' args=%s",
                 tool_name, tool_args,
             )
 
             if tool_name not in tools_by_name:
-                tool_result: Any = {"error": f"Outil inconnu : '{tool_name}'"}
+                tool_result: Any = {"error": f"Unknown tool: '{tool_name}'"}
                 logger.warning("competitive_intel_agent_node: unknown tool '%s'", tool_name)
             else:
                 try:
@@ -164,7 +242,7 @@ def competitive_intel_agent_node(state: AgentState) -> AgentState:
 
         messages.extend(tool_messages)
 
-        # Force final response on last allowed iteration
+        # Force final response on last iteration
         if iteration == MAX_TOOL_ITERATIONS:
             logger.warning(
                 "competitive_intel_agent_node: reached MAX_TOOL_ITERATIONS=%d — forcing final",
@@ -184,18 +262,16 @@ def competitive_intel_agent_node(state: AgentState) -> AgentState:
                     "error_message": f"Erreur lors de la synthèse finale : {exc}",
                 }
 
-    # If no SQL tools ran but the LLM answered from context, store it
+    # Fallback: if LLM answered from context without tools
     if not accumulated_tool_results and new_messages:
-        last_ai = new_messages[-1]
-        if isinstance(last_ai, AIMessage) and last_ai.content:
-            accumulated_tool_results["competitive_intel_answer"] = str(last_ai.content)
+        last = new_messages[-1]
+        if isinstance(last, AIMessage) and last.content:
+            accumulated_tool_results["competitive_intel_answer"] = str(last.content)
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
     logger.info(
-        "competitive_intel_agent_node done — %d messages, %d tool results — %.1f ms",
-        len(new_messages),
-        len(accumulated_tool_results),
-        elapsed_ms,
+        "competitive_intel_agent_node done — %d messages, %d tools called — %.0fms",
+        len(new_messages), len(accumulated_tool_results), elapsed_ms,
     )
 
     return {

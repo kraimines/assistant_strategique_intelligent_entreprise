@@ -28,6 +28,33 @@ export interface MarketAlert {
   gnn_hidden_risks: string[];
 }
 
+export interface NewsEntity {
+  id?: string;
+  name: string;
+  label?: string;   // 'Company' | 'Technology' | 'Regulation' | 'Competitor' | 'Country' | 'Event' | 'Sector' | 'Person' | 'MarketTrend' | 'MacroIndicator'
+  type: string;
+  ticker?: string | null;
+  aliases?: string[];
+  properties?: Record<string, unknown>;
+}
+
+export interface CausalRelation {
+  from_entity: string;
+  from_type?: string;
+  to_entity: string;
+  to_type?: string;
+  relation_type?: string;   // canonical enum value e.g. CAUSES_IMPACT_ON
+  type?: string;            // alias returned by some backends
+  impact_score: number;
+  sentiment?: number;
+  confidence: number;
+  causality_score?: number;
+  reason: string;
+  evidence?: string;
+  time_horizon: string;
+  talan_relevant: boolean;
+}
+
 export interface NewsAnalysis {
   id: string;
   article_title: string;
@@ -35,32 +62,30 @@ export interface NewsAnalysis {
   event_type: string;
   severity: number;
   urgency: 'low' | 'medium' | 'high' | 'critical';
+  detected_category?: string;
+  extraction_confidence?: number;
+  overall_sentiment?: number;
   talan_impact_score: number;
   talan_impact_reason: string;
   talan_action_recommended: string | null;
   affected_tickers: string[];
+  macro_indicators_affected?: string[];
   analysis_timestamp: string;
   article_url?: string | null;
   article_source?: string | null;
   article_published_at?: string | null;
-  entities?: { name: string; type: string; ticker?: string }[];
-  causal_relations?: {
-    from_entity: string;
-    to_entity: string;
-    impact_score: number;
-    confidence: number;
-    reason: string;
-    time_horizon: string;
-    talan_relevant: boolean;
-  }[];
+  entities?: NewsEntity[];
+  causal_relations?: CausalRelation[];
 }
 
 export interface KGSnapshot {
   nodes: {
     id: string;
     name: string;
+    slug?: string;
     labels: string[];
     ticker?: string;
+    properties?: Record<string, unknown>;
   }[];
   edges: {
     from: string;
@@ -98,6 +123,67 @@ export interface GNNPrediction {
   hidden_risk: boolean;
 }
 
+export interface PropagationStep {
+  node_name: string;
+  node_type: string;
+  relation_type: string;
+  reason: string;
+  impact_score: number;
+  time_horizon: string;
+  /** v3 — edge α from the compatibility matrix (0..1) */
+  relation_strength?: number;
+  /** v3 — derived from PlausibilityScorer rule features */
+  business_relevance?: number;
+  /** v3 — exp half-life decay factor (0..1, fresher → 1) */
+  freshness_score?: number;
+  /** v3 — confidence on the underlying causal edge */
+  edge_confidence?: number;
+  is_generic_hub_step?: boolean;
+}
+
+export type RiskCategory =
+  | 'competitive' | 'regulatory' | 'supply_chain' | 'macro'
+  | 'cyber' | 'talent' | 'tech_disruption';
+
+export type Severity = 'low' | 'medium' | 'high' | 'critical';
+export type TimeHorizon = 'immediate' | 'short' | 'medium' | 'long';
+export type Uncertainty = 'low' | 'medium' | 'high';
+
+export interface PropagationExplanation {
+  causal_reasoning: string;
+  affected_business_unit: string;
+  affected_sector: string;
+  risk_category: RiskCategory;
+  severity: Severity;
+  recommended_action: string;
+  time_horizon: TimeHorizon;
+  confidence_rationale?: string;
+}
+
+export interface PropagationPath {
+  source_name: string;
+  source_type: string;
+  steps: PropagationStep[];
+  chain_score: number;
+  chain_conf: number;
+  hops: number;
+  time_horizon_label: string;
+  narrative: string;
+  event_title?: string;
+  key_impact?: string;
+  source_evidence?: string;
+  // ── v3 ranking outputs ───────────────────────────────────────────
+  business_plausibility?: number;
+  causal_coherence?: number;
+  path_specificity?: number;
+  weighted_score?: number;
+  impact_probability?: number;
+  estimated_business_impact_pct?: number;
+  confidence?: number;
+  uncertainty?: Uncertainty;
+  explanation?: PropagationExplanation | null;
+}
+
 export interface GNNResult {
   run_at: string;
   trigger_event: string;
@@ -105,6 +191,42 @@ export interface GNNResult {
   talan_prediction: GNNPrediction | null;
   systemic_risk_score: number;
   top_hidden_risks: GNNPrediction[];
+  propagation_paths: PropagationPath[];
+  /** tgat_trained | tgat_random | heuristic */
+  inference_mode?: string;
+  /** v3 calibration / filter metadata */
+  calibration_method?: 'platt' | 'isotonic' | 'none';
+  filtered_path_count?: number;
+  rejected_path_count?: number;
+}
+
+export interface ForecastResult {
+  forecast_7d: number | null;
+  forecast_30d: number | null;
+  trend: 'improving' | 'deteriorating' | 'stable';
+  confidence: number;
+  data_points: number;
+  method: string;
+  generated_at: string;
+}
+
+export interface StrategicRecommendation {
+  title: string;
+  action: string;
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  horizon: '7_days' | '30_days' | '90_days';
+  domain: 'commercial' | 'rh' | 'financier' | 'technologique' | 'risque';
+}
+
+export interface RecommendationResult {
+  recommendations: StrategicRecommendation[];
+  trigger_event: string;
+  talan_impact: number;
+  systemic_risk: number;
+  forecast_7d: number | null;
+  forecast_30d: number | null;
+  model_used: string;
+  generated_at: string;
 }
 
 export interface PriceSnapshot {
@@ -121,6 +243,28 @@ export interface RunResult {
   message: string;
   report?: unknown;
   alerts?: MarketAlert[];
+}
+
+// ── Enriched article (new classifier pipeline) ─────────────────────────────────
+
+export type ArticleCategory =
+  | 'regulatory_changes'
+  | 'competitor_moves'
+  | 'tech_launches'
+  | 'financial_market_impact'
+  | 'geopolitical_events'
+  | 'talent_market_signals';
+
+export interface EnrichedArticle {
+  title: string;
+  source: string;
+  date: string | null;
+  url: string;
+  summary: string;
+  impact_score: number;           // 1–10
+  categories: ArticleCategory[];
+  key_entities: string[];
+  potential_impact_on_talent_or_competition: string;
 }
 
 // ── API calls ──────────────────────────────────────────────────────────────────
@@ -150,6 +294,9 @@ export const marketAnalysisApi = {
   getKGStats: () =>
     api.get<KGStats>('/market/kg/stats'),
 
+  getKGFull: (limit = 1200) =>
+    api.get<KGSnapshot>('/market/kg/full', { params: { limit } }),
+
   getKGRisks: () =>
     api.get<HiddenRisk[]>('/market/kg/risks'),
 
@@ -170,4 +317,97 @@ export const marketAnalysisApi = {
 
   getReport: (id: string) =>
     api.get(`/market/reports/${id}`),
+
+  // Enriched news (new classifier pipeline)
+  getEnrichedNews: (min_impact = 5, tier1_only = false, live = false) =>
+    api.get<EnrichedArticle[]>('/market/news/enriched', {
+      params: { min_impact, tier1_only, live },
+    }),
+
+  // Knowledge Graph — PageRank centrality
+  getPageRank: (top_n = 40) =>
+    api.get<Array<{ name: string; slug: string; label: string; score: number }>>(
+      '/market/kg/pagerank',
+      { params: { top_n } },
+    ),
+
+  // Knowledge Graph — temporal impact evolution
+  getTemporalEvolution: (entity = 'Talan', hours = 168) =>
+    api.get<Array<{ timestamp: string; impact_score: number; source_article: string }>>(
+      '/market/kg/temporal',
+      { params: { entity, hours } },
+    ),
+
+  // Forecast (LSTM 7d / 30d)
+  getForecast: () =>
+    api.get<ForecastResult>('/market/forecast'),
+
+  // Strategic recommendations
+  getRecommendations: () =>
+    api.post<RecommendationResult>('/market/recommend', {}),
+
+  getRecommendationHistory: (limit = 5) =>
+    api.get<RecommendationResult[]>('/market/recommend/history', { params: { limit } }),
+
+  // Human-in-the-loop: natural-language what-if simulation
+  simulateEvent: (payload: QuickSimulationRequest, commit = false) =>
+    api.post<ManualSimulationResult>('/market/simulate', payload, {
+      params: { commit },
+      timeout: 120_000,   // 2 min — LLM extraction + GNN inference
+    }),
 };
+
+// ── Manual simulation types ────────────────────────────────────────────────────
+
+export interface ManualEntity {
+  name: string;
+  type: string;            // Company | Competitor | Sector | Country | Event | Regulation | Supplier | Client | Concept | Technology | MacroIndicator
+  sector?: string | null;
+  country?: string | null;
+  ticker?: string | null;
+  aliases?: string[];
+}
+
+export interface ManualRelation {
+  from_entity: string;
+  to_entity: string;
+  relation_type?: string;   // default CAUSES_IMPACT_ON
+  impact_score: number;     // −1..1
+  confidence: number;       // 0..1
+  reason?: string;
+  time_horizon?: string;    // immediate|short_term|medium_term|long_term
+  evidence?: string;
+}
+
+/** Natural-language request — the LLM extracts entities + relations automatically */
+export interface QuickSimulationRequest {
+  event_text: string;
+  category?: string;   // optional hint: 'competition' | 'regulation' | 'technology' | etc.
+}
+
+export interface ManualSimulationRequest {
+  title: string;
+  summary?: string;
+  severity?: number;
+  urgency?: 'low' | 'medium' | 'high' | 'critical';
+  source?: string;
+  entities: ManualEntity[];
+  relations: ManualRelation[];
+}
+
+export interface ManualSimulationResult {
+  simulation_id: string;
+  committed: boolean;
+  talan_impact_pct: number;
+  talan_impact_prob: number;
+  systemic_risk_score: number;
+  propagation_paths: PropagationPath[];
+  filtered_path_count: number;
+  rejected_path_count: number;
+  augmented_node_count: number;
+  augmented_edge_count: number;
+  // LLM extraction metadata
+  extracted_entities: string[];
+  extracted_relations_count: number;
+  llm_event_summary: string;
+}

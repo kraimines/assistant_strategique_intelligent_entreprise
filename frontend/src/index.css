@@ -1,394 +1,248 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Theme tokens ─────────────────────────────────────────────────────────── */
-:root,
-[data-theme="dark"] {
-  --cyber-black: #0a0a0f;
-  --cyber-dark: #0d0d14;
-  --cyber-card: #12121a;
-  --cyber-border: #1a1a2e;
-  --cyber-cyan: #00d4ff;
-  --cyber-violet: #7c3aed;
-  --cyber-emerald: #10b981;
-  --cyber-amber: #f59e0b;
-  --cyber-pink: #ec4899;
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Cold Premium Light
+   Palette: #F8FAFC base · #3B82F6 primary · #64748B secondary · #0F172A ink
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Semantic tokens — dark */
-  --bg-base: #0a0a0f;
-  --bg-surface: #0d0d14;
-  --bg-card: #12121a;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-accent: rgba(0, 212, 255, 0.25);
-  --text-primary: rgba(255, 255, 255, 0.87);
-  --text-secondary: rgba(255, 255, 255, 0.5);
-  --text-muted: rgba(255, 255, 255, 0.3);
-  --sidebar-bg: rgba(10, 10, 15, 0.95);
-  --glass-bg: rgba(18, 18, 26, 0.7);
-  --scrollbar-track: #0d0d14;
-  --scrollbar-thumb: rgba(0, 212, 255, 0.3);
-  --scrollbar-thumb-hover: rgba(0, 212, 255, 0.6);
-  --code-bg: rgba(0, 212, 255, 0.1);
-  --pre-bg: rgba(0, 0, 0, 0.4);
-  --table-head-bg: rgba(0, 212, 255, 0.08);
-  --table-row-hover: rgba(0, 212, 255, 0.04);
-  --table-border: rgba(0, 212, 255, 0.15);
-  --table-head-border: rgba(0, 212, 255, 0.25);
-  --table-row-border: rgba(255, 255, 255, 0.05);
-  --blockquote-border: rgba(0, 212, 255, 0.5);
-  --blockquote-text: rgba(255, 255, 255, 0.6);
+:root {
+  /* ── Backgrounds ─────────────────────────────────────────────────────── */
+  --bg-base:        #bae6fd;   /* page background — sky-200 bleu ciel        */
+  --bg-surface:     rgba(255, 255, 255, 0.88);   /* card / panel — frosted   */
+  --bg-overlay:     rgba(255, 255, 255, 0.82);   /* frosted overlay          */
+  --bg-overlay-card: rgba(255, 255, 255, 0.95);  /* modal / card overlay     */
+  --bg-overlay-input: #FFFFFF; /* input background                           */
+  --bg-sidebar:     rgba(255, 255, 255, 0.92);   /* sidebar background       */
+  --bg-topbar:      rgba(255, 255, 255, 0.80);   /* topbar frosted glass     */
 
-  /* Overlay backgrounds (used in inline styles) */
-  --bg-overlay: rgba(10, 10, 15, 0.8);
-  --bg-overlay-card: rgba(12, 12, 20, 0.92);
-  --bg-overlay-input: rgba(18, 18, 28, 0.85);
+  /* ── Primary accent (cold blue) ─────────────────────────────────────── */
+  --primary:        #3B82F6;
+  --primary-dark:   #2563EB;
+  --primary-light:  #60A5FA;
+  --primary-subtle: #EFF6FF;   /* blue-50                                    */
+  --primary-muted:  #DBEAFE;   /* blue-100                                   */
 
-  /* Form inputs */
-  --input-bg: rgba(255, 255, 255, 0.05);
-  --input-border: rgba(255, 255, 255, 0.1);
-  --input-text: rgba(255, 255, 255, 0.87);
-  --input-placeholder: rgba(255, 255, 255, 0.25);
+  /* ── Text ────────────────────────────────────────────────────────────── */
+  --text-primary:   #0F172A;   /* slate-900 — headings / body                */
+  --text-secondary: #334155;   /* slate-700 — secondary labels               */
+  --text-muted:     #64748B;   /* slate-500 — placeholder, captions          */
+  --text-faint:     #94A3B8;   /* slate-400 — very subtle                    */
 
-  /* Chart / data-viz */
-  --chart-grid: rgba(255, 255, 255, 0.05);
-  --chart-axis: rgba(255, 255, 255, 0.4);
-  --chart-legend: rgba(255, 255, 255, 0.5);
-  --chart-tooltip-bg: rgba(12, 12, 20, 0.95);
-  --chart-tooltip-border: rgba(255, 255, 255, 0.1);
-  --chart-tooltip-color: #ffffff;
+  /* ── Borders & separators ────────────────────────────────────────────── */
+  --border-subtle:  #E2E8F0;   /* slate-200                                  */
+  --border-strong:  #CBD5E1;   /* slate-300                                  */
+  --border-accent:  rgba(59, 130, 246, 0.30);   /* blue accent border        */
 
-  /* Conversation list items */
-  --conv-active-bg: rgba(255, 255, 255, 0.08);
-  --conv-hover-bg: rgba(255, 255, 255, 0.05);
+  /* ── Semantic colors ─────────────────────────────────────────────────── */
+  --success:        #10B981;
+  --success-subtle: #D1FAE5;
+  --danger:         #EF4444;
+  --danger-subtle:  #FEE2E2;
+  --warning:        #F59E0B;
+  --warning-subtle: #FEF3C7;
+  --info:           #06B6D4;   /* cyan-500                                   */
+  --info-subtle:    #CFFAFE;
+
+  /* ── Shadows ─────────────────────────────────────────────────────────── */
+  --shadow-card:    0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.06);
+  --shadow-card-md: 0 2px 8px rgba(15,23,42,0.08), 0 8px 24px rgba(15,23,42,0.08);
+  --shadow-hover:   0 4px 12px rgba(59,130,246,0.12), 0 12px 32px rgba(59,130,246,0.10);
+  --shadow-focus:   0 0 0 3px rgba(59,130,246,0.18);
+
+  /* ── Sidebar specific ────────────────────────────────────────────────── */
+  --sidebar-border: #E2E8F0;
+  --sidebar-active-bg: #EFF6FF;
+  --sidebar-active-text: #2563EB;
+  --sidebar-active-border: #BFDBFE;
+  --sidebar-hover-bg: #F1F5F9;
+  --sidebar-text: #475569;
+  --sidebar-text-muted: #94A3B8;
+
+  /* ── Form inputs ─────────────────────────────────────────────────────── */
+  --input-bg:          #FFFFFF;
+  --input-border:      #E2E8F0;
+  --input-border-focus: #3B82F6;
+  --input-text:        #0F172A;
+  --input-placeholder: #94A3B8;
+
+  /* ── Chat / markdown ─────────────────────────────────────────────────── */
+  --code-bg:           rgba(59, 130, 246, 0.07);
+  --pre-bg:            #F8FAFC;
+  --table-head-bg:     #F1F5F9;
+  --table-row-hover:   #F8FAFC;
+  --table-border:      #E2E8F0;
+  --table-head-border: #CBD5E1;
+  --table-row-border:  #F1F5F9;
+  --blockquote-border: #3B82F6;
+  --blockquote-text:   #475569;
+
+  /* ── Charts ─────────────────────────────────────────────────────────── */
+  --chart-grid:          rgba(15,23,42,0.06);
+  --chart-axis:          #94A3B8;
+  --chart-legend:        #64748B;
+  --chart-tooltip-bg:    #FFFFFF;
+  --chart-tooltip-border: #E2E8F0;
+  --chart-tooltip-color: #0F172A;
+
+  /* ── Scrollbar ───────────────────────────────────────────────────────── */
+  --scrollbar-track: rgba(186,230,253,0.40);
+  --scrollbar-thumb: rgba(14,165,233,0.35);
+  --scrollbar-thumb-hover: rgba(14,165,233,0.55);
+
+  /* ── Conversation list ───────────────────────────────────────────────── */
+  --conv-active-bg: #EFF6FF;
+  --conv-hover-bg:  #F8FAFC;
 }
 
-/* ───────────────────────────────────────────────────────────────────────────
-   LIGHT MODE — "Pearl Violet" — warm white base with rich violet accents
-   ─────────────────────────────────────────────────────────────────────────── */
-[data-theme="light"] {
-  /* Brand palette (overrides dark-mode neons with richer, satured hues) */
-  --cyber-black: #f5f3ff;   /* page background: barely-there lavender */
-  --cyber-dark:  #ede9fe;   /* surface: soft violet wash */
-  --cyber-card:  #ffffff;   /* cards: pure white */
-  --cyber-border: #ddd6fe;  /* borders: light violet */
-  --cyber-cyan:   #6366f1;  /* primary accent: indigo */
-  --cyber-violet: #7c3aed;  /* secondary accent: violet */
-  --cyber-emerald: #059669;
-  --cyber-amber:   #d97706;
-  --cyber-pink:    #ec4899;
-
-  /* Semantic tokens */
-  --bg-base:    #f5f3ff;          /* full page bg */
-  --bg-surface: #ede9fe;          /* subtle section bg */
-  --bg-card:    #ffffff;          /* card background */
-  --border-subtle: rgba(124, 58, 237, 0.12);   /* whisper violet border */
-  --border-accent: rgba(99, 102, 241, 0.35);
-  --text-primary:   #3730a3;      /* indigo medium — readable, not black */
-  --text-secondary: #6d5fad;      /* soft violet-grey */
-  --text-muted:     #a89ecf;      /* pale lavender */
-
-  /* Sidebar gets a gorgeous gradient */
-  --sidebar-bg: linear-gradient(180deg, #4c1d95 0%, #6d28d9 60%, #7c3aed 100%);
-
-  /* Glass: white frosted */
-  --glass-bg: rgba(255, 255, 255, 0.80);
-
-  /* Scrollbar */
-  --scrollbar-track: #ede9fe;
-  --scrollbar-thumb: rgba(124, 58, 237, 0.35);
-  --scrollbar-thumb-hover: rgba(124, 58, 237, 0.6);
-
-  /* Markdown / code */
-  --code-bg: rgba(99, 102, 241, 0.08);
-  --pre-bg:  rgba(99, 102, 241, 0.05);
-  --table-head-bg:    rgba(99, 102, 241, 0.07);
-  --table-row-hover:  rgba(99, 102, 241, 0.05);
-  --table-border:     rgba(99, 102, 241, 0.18);
-  --table-head-border: rgba(99, 102, 241, 0.28);
-  --table-row-border: rgba(124, 58, 237, 0.08);
-  --blockquote-border: rgba(124, 58, 237, 0.45);
-  --blockquote-text:   #4c4a7a;
-
-  /* Overlay panels */
-  --bg-overlay:       rgba(245, 243, 255, 0.92);
-  --bg-overlay-card:  rgba(255, 255, 255, 0.98);
-  --bg-overlay-input: rgba(255, 255, 255, 0.98);
-
-  /* Form inputs — soft indigo tint */
-  --input-bg:          #f5f3ff;
-  --input-border:      rgba(124, 58, 237, 0.2);
-  --input-text:        #3730a3;
-  --input-placeholder: rgba(109, 97, 193, 0.50);
-
-  /* Charts */
-  --chart-grid:          rgba(99, 102, 241, 0.10);
-  --chart-axis:          rgba(78, 70, 130, 0.55);
-  --chart-legend:        rgba(78, 70, 130, 0.6);
-  --chart-tooltip-bg:    rgba(255, 255, 255, 0.99);
-  --chart-tooltip-border: rgba(124, 58, 237, 0.2);
-  --chart-tooltip-color: #1e1b4b;
-
-  /* Conversation list */
-  --conv-active-bg: rgba(99, 102, 241, 0.10);
-  --conv-hover-bg:  rgba(99, 102, 241, 0.05);
-
-  /* Light-mode card shadow (used via CSS class below) */
-  --card-shadow: 0 1px 3px rgba(124, 58, 237, 0.08), 0 4px 16px rgba(99, 102, 241, 0.10);
-  --card-shadow-hover: 0 4px 8px rgba(124, 58, 237, 0.12), 0 12px 32px rgba(99, 102, 241, 0.15);
-}
-
-/* ── Light-mode overrides ─────────────────────────────────────────────────── */
-
-/* Page background: soft radial gradient anchored top-left */
-[data-theme="light"] body {
-  background: radial-gradient(ellipse 120% 80% at 0% 0%, #ede9fe 0%, #f5f3ff 45%, #fdf4ff 100%);
-  min-height: 100vh;
-}
-
-/* Glass cards get real shadows in light mode */
-[data-theme="light"] .glass {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: var(--card-shadow);
-}
-[data-theme="light"] .glass-hover:hover {
-  box-shadow: var(--card-shadow-hover);
-  border-color: rgba(99, 102, 241, 0.25) !important;
-}
-
-
-/* ── Light-mode text overrides ───────────────────────────────────────────────
-   Remap ALL hardcoded Tailwind white-text utilities to soft violet palette.
-   The sidebar uses inline styles so these don't affect it.
-   ─────────────────────────────────────────────────────────────────────────── */
-
-/* Full white → primary */
-[data-theme="light"] .text-white                { color: var(--text-primary)   !important; }
-
-/* High opacity (80–95%) → primary */
-[data-theme="light"] .text-white\/95,
-[data-theme="light"] .text-white\/90,
-[data-theme="light"] .text-white\/85,
-[data-theme="light"] .text-white\/80,
-[data-theme="light"] .text-white\/70            { color: var(--text-primary)   !important; }
-
-/* Medium opacity (50–65%) → secondary */
-[data-theme="light"] .text-white\/65,
-[data-theme="light"] .text-white\/60,
-[data-theme="light"] .text-white\/50            { color: var(--text-secondary) !important; }
-
-/* Low opacity (15–45%) → muted */
-[data-theme="light"] .text-white\/45,
-[data-theme="light"] .text-white\/40,
-[data-theme="light"] .text-white\/30,
-[data-theme="light"] .text-white\/25,
-[data-theme="light"] .text-white\/20,
-[data-theme="light"] .text-white\/15,
-[data-theme="light"] .text-white\/10,
-[data-theme="light"] .text-white\/8             { color: var(--text-muted)     !important; }
-
-/* Subtle bg overlays → soft violet tints */
-[data-theme="light"] .bg-white\/3,
-[data-theme="light"] .bg-white\/4,
-[data-theme="light"] .bg-white\/5               { background: rgba(109,  97, 193, 0.05) !important; }
-[data-theme="light"] .bg-white\/8               { background: rgba(109,  97, 193, 0.08) !important; }
-[data-theme="light"] .bg-white\/10,
-[data-theme="light"] .bg-white\/12              { background: rgba(109,  97, 193, 0.10) !important; }
-
-/* Subtle borders → violet tint */
-[data-theme="light"] .border-white\/4,
-[data-theme="light"] .border-white\/5,
-[data-theme="light"] .border-white\/6,
-[data-theme="light"] .border-white\/8,
-[data-theme="light"] .border-white\/10,
-[data-theme="light"] .border-white\/12,
-[data-theme="light"] .border-white\/20          { border-color: rgba(124, 58, 237, 0.15) !important; }
-
-/* placeholder-white/30 etc. → soft */
-[data-theme="light"] .placeholder-white\/30::placeholder { color: var(--input-placeholder); }
-
-/* Hover states */
-[data-theme="light"] .hover\:text-white:hover   { color: var(--text-primary)   !important; }
-[data-theme="light"] .hover\:text-white\/60:hover,
-[data-theme="light"] .hover\:text-white\/70:hover,
-[data-theme="light"] .hover\:text-white\/80:hover { color: var(--text-secondary) !important; }
-[data-theme="light"] .hover\:bg-white\/5:hover  { background: rgba(109, 97, 193, 0.06) !important; }
-[data-theme="light"] .hover\:bg-white\/8:hover  { background: rgba(109, 97, 193, 0.10) !important; }
-[data-theme="light"] .hover\:bg-white\/10:hover { background: rgba(109, 97, 193, 0.12) !important; }
-
-/* Table rows in Dashboard */
-[data-theme="light"] .hover\:bg-white\/3:hover  { background: rgba(109, 97, 193, 0.04) !important; }
-
-/* ── Global theme-aware utilities ─────────────────────────────────────────── */
-
-/* Form inputs that adapt to theme */
-.theme-input {
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  color: var(--input-text);
-  transition: border-color 0.2s, background 0.2s;
-}
-.theme-input::placeholder { color: var(--input-placeholder); }
-.theme-input:focus { outline: none; }
-
-/* Chat textarea placeholder */
-.chat-textarea::placeholder { color: var(--input-placeholder); }
-
-* {
-  box-sizing: border-box;
-}
+/* ── Base reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   padding: 0;
-  background-color: var(--bg-base);
+  background: linear-gradient(135deg, #e0f7fa 0%, #bae6fd 45%, #dbeafe 100%);
+  background-attachment: fixed;
   color: var(--text-primary);
-  font-family: 'Inter', 'Satoshi', sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--scrollbar-track);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
-}
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb  { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
-/* Glassmorphism base */
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENT UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Glass card — white frosted surface */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--bg-overlay);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle);
 }
 
+/* Card — frosted glass card on sky blue background */
+.card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.60);
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(14, 116, 144, 0.10), 0 1px 4px rgba(14, 116, 144, 0.08);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.card:hover {
+  box-shadow: 0 8px 32px rgba(14, 116, 144, 0.18), 0 2px 8px rgba(14, 116, 144, 0.12);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Hover lift */
 .glass-hover {
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 .glass-hover:hover {
-  border-color: rgba(0, 212, 255, 0.3);
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-accent) !important;
 }
 
-/* Neon glow effects */
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+/* Form inputs */
+.theme-input {
+  background:    var(--input-bg);
+  border:        1px solid var(--input-border);
+  color:         var(--input-text);
+  border-radius: 10px;
+  transition:    border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.glow-violet {
-  box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
-}
-.glow-emerald {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+.theme-input::placeholder { color: var(--input-placeholder); }
+.theme-input:focus {
+  outline:      none;
+  border-color: var(--input-border-focus);
+  box-shadow:   var(--shadow-focus);
 }
 
-/* Text glow */
-.text-glow-cyan {
-  text-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
-}
-.text-glow-violet {
-  text-shadow: 0 0 10px rgba(124, 58, 237, 0.8);
-}
+/* Chat textarea placeholder */
+.chat-textarea::placeholder { color: var(--input-placeholder); }
 
 /* Shimmer loading skeleton */
 .shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.05) 100%
+    #F1F5F9 0%,
+    #E2E8F0 50%,
+    #F1F5F9 100%
   );
   background-size: 200% 100%;
   animation: shimmer 2s infinite linear;
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-}
+/* Domain color chips (sidebar, chat) */
+.domain-hr  { color: #10B981; }
+.domain-crm { color: #3B82F6; }
+.domain-erp { color: #F59E0B; }
+.domain-rag { color: #8B5CF6; }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 10px rgba(0, 212, 255, 0.2); }
-  50% { box-shadow: 0 0 30px rgba(0, 212, 255, 0.6); }
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   MARKDOWN BODY — clean readable prose
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Noise grain texture overlay */
-.noise::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.3;
-}
-
-/* Gradient borders */
-.gradient-border {
-  position: relative;
-  background: linear-gradient(var(--cyber-card), var(--cyber-card)) padding-box,
-              linear-gradient(135deg, rgba(0,212,255,0.5), rgba(124,58,237,0.5)) border-box;
-  border: 1px solid transparent;
-}
-
-/* Chat markdown styles */
-.markdown-body h1, .markdown-body h2, .markdown-body h3 {
-  color: var(--cyber-cyan);
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  color: var(--text-primary);
   font-weight: 700;
   margin: 1em 0 0.5em;
 }
-.markdown-body h1 { font-size: 1.3em; }
-.markdown-body h2 { font-size: 1.15em; }
-.markdown-body h3 { font-size: 1em; }
+.markdown-body h1 { font-size: 1.25em; }
+.markdown-body h2 { font-size: 1.1em;  }
+.markdown-body h3 { font-size: 1em;    }
 
 .markdown-body p {
   margin: 0.5em 0;
-  line-height: 1.6;
+  line-height: 1.7;
+  color: var(--text-secondary);
 }
 
-.markdown-body ul, .markdown-body ol {
+.markdown-body ul,
+.markdown-body ol {
   margin: 0.5em 0;
   padding-left: 1.5em;
 }
-
 .markdown-body li {
-  margin: 0.25em 0;
+  margin: 0.3em 0;
+  color: var(--text-secondary);
 }
 
 .markdown-body code {
   background: var(--code-bg);
-  color: var(--cyber-cyan);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
+  color: var(--primary-dark);
+  padding: 0.15em 0.45em;
+  border-radius: 5px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85em;
+  font-size: 0.84em;
 }
 
 .markdown-body pre {
   background: var(--pre-bg);
-  border: 1px solid var(--border-accent);
-  border-radius: 8px;
-  padding: 1em;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 1em 1.2em;
   overflow-x: auto;
+  margin: 0.75em 0;
 }
 
 .markdown-body pre code {
@@ -398,32 +252,31 @@ html, body {
 }
 
 .markdown-body table {
-  display: table;
   width: 100%;
   border-collapse: collapse;
   margin: 0.75em 0;
   font-size: 0.875em;
   border: 1px solid var(--table-border);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
-/* Wrap table in scrollable container for narrow screens */
 .markdown-body > :where(table) {
   display: block;
   overflow-x: auto;
   white-space: nowrap;
 }
 
-.markdown-body thead {
-  background: var(--table-head-bg);
-}
+.markdown-body thead { background: var(--table-head-bg); }
 
 .markdown-body th {
-  color: var(--cyber-cyan);
+  color: var(--text-primary);
   padding: 0.6em 1em;
   text-align: left;
   font-weight: 600;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   border-bottom: 1px solid var(--table-head-border);
   white-space: nowrap;
 }
@@ -431,17 +284,12 @@ html, body {
 .markdown-body td {
   padding: 0.5em 1em;
   border-bottom: 1px solid var(--table-row-border);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
-.markdown-body tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.markdown-body tr:hover td {
-  background: var(--table-row-hover);
-}
+.markdown-body tbody tr:last-child td { border-bottom: none; }
+.markdown-body tr:hover td { background: var(--table-row-hover); }
 
 .markdown-body strong {
   color: var(--text-primary);
@@ -449,8 +297,19 @@ html, body {
 }
 
 .markdown-body blockquote {
-  border-left: 3px solid var(--blockquote-border);
+  border-left: 3px solid var(--primary);
   padding-left: 1em;
   color: var(--blockquote-text);
   margin: 0.5em 0;
+  background: var(--primary-subtle);
+  border-radius: 0 6px 6px 0;
+  padding: 0.6em 1em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FOCUS & ACCESSIBILITY
+   ═══════════════════════════════════════════════════════════════════════════ */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

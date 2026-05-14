@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Zap, Mail, Lock } from 'lucide-react';
-import ParticleCanvas from '../components/ui/ParticleCanvas';
+import { Eye, EyeOff, Zap, Mail, Lock, ArrowRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const { signIn, loading, error } = useAuth();
@@ -18,107 +17,208 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-cyber-black flex items-center justify-center relative overflow-hidden">
-      <ParticleCanvas />
-
-      {/* Background glow orbs */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyber-cyan/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyber-violet/5 rounded-full blur-3xl pointer-events-none" />
-
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="relative z-10 w-full max-w-md px-6"
+    <div
+      className="min-h-screen flex"
+      style={{ background: 'var(--bg-base)' }}
+    >
+      {/* ── Left decorative panel ─────────────────────────────────────────── */}
+      <div
+        className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-16 relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(145deg, #1E3A8A 0%, #2563EB 45%, #3B82F6 75%, #06B6D4 100%)',
+        }}
       >
-        {/* Card */}
+        {/* Soft background orbs */}
         <div
-          className="rounded-2xl p-8"
-          style={{
-            background: 'var(--bg-overlay-card)',
-            backdropFilter: 'blur(24px)',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: '0 0 60px rgba(0,212,255,0.05)',
-          }}
+          className="absolute top-16 right-16 w-64 h-64 rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, #FFFFFF, transparent)' }}
+        />
+        <div
+          className="absolute bottom-24 left-12 w-48 h-48 rounded-full opacity-15"
+          style={{ background: 'radial-gradient(circle, #BAE6FD, transparent)' }}
+        />
+
+        {/* Content */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+          className="relative z-10 text-white text-center max-w-sm"
         >
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-              className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyber-cyan to-cyber-violet flex items-center justify-center mb-4"
-              style={{ boxShadow: '0 0 30px rgba(0,212,255,0.3)' }}
-            >
-              <Zap size={28} className="text-white" />
-            </motion.div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Talan Intelligence</h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>Connectez-vous à votre espace</p>
+          {/* Logo mark */}
+          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-8">
+            <Zap size={32} color="#fff" />
           </div>
 
+          <h2 className="text-3xl font-bold mb-4">Talan Intelligence</h2>
+          <p className="text-blue-100 text-base leading-relaxed">
+            Votre assistant stratégique intelligent pour les domaines RH, CRM et ERP.
+          </p>
+
+          {/* Feature pills */}
+          <div className="flex flex-wrap gap-2 justify-center mt-8">
+            {['Intelligence artificielle', 'Données temps réel', 'Agents spécialisés'].map((f) => (
+              <span
+                key={f}
+                className="px-3 py-1.5 rounded-full text-xs font-medium"
+                style={{ background: 'rgba(255,255,255,0.15)', color: '#E0F2FE' }}
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ── Right: login form ─────────────────────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="w-full max-w-md"
+        >
+          {/* Header */}
+          <div className="mb-8">
+            {/* Mobile logo */}
+            <div className="flex items-center gap-3 mb-8 lg:hidden">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}
+              >
+                <Zap size={18} color="#fff" />
+              </div>
+              <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                Talan Intelligence
+              </span>
+            </div>
+
+            <h1
+              className="text-2xl font-bold mb-1.5"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Bon retour
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Connectez-vous à votre espace de travail
+            </p>
+          </div>
+
+          {/* Error */}
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-5 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+              className="mb-5 p-3.5 rounded-xl text-sm flex items-start gap-3"
+              style={{
+                background:  'var(--danger-subtle)',
+                border:      '1px solid rgba(239,68,68,0.25)',
+                color:       'var(--danger)',
+              }}
             >
+              <span className="flex-shrink-0 mt-0.5">⚠</span>
               {error}
             </motion.div>
           )}
 
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
+            {/* Email field */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Email</label>
+              <label
+                className="text-sm font-medium"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Adresse e-mail
+              </label>
               <div className="relative">
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                <Mail
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: 'var(--text-faint)' }}
+                />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="vous@talan.com"
                   required
-                  className="theme-input w-full pl-10 pr-4 py-3 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all duration-200"
+                  className="theme-input w-full pl-10 pr-4 py-3 text-sm"
                 />
               </div>
             </div>
 
-            {/* Password */}
+            {/* Password field */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Mot de passe</label>
+              <div className="flex items-center justify-between">
+                <label
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  Mot de passe
+                </label>
+                <button
+                  type="button"
+                  className="text-xs font-medium transition-colors"
+                  style={{ color: 'var(--primary)' }}
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
               <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                <Lock
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: 'var(--text-faint)' }}
+                />
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="theme-input w-full pl-10 pr-12 py-3 rounded-xl text-sm focus:border-cyber-cyan/50 transition-all duration-200"
+                  className="theme-input w-full pl-10 pr-12 py-3 text-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
+                  style={{ color: 'var(--text-faint)' }}
                 >
-                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" fullWidth loading={loading} size="lg" className="mt-2">
+            {/* Submit */}
+            <Button
+              type="submit"
+              fullWidth
+              loading={loading}
+              size="lg"
+              icon={<ArrowRight size={16} />}
+              className="mt-2"
+            >
               Se connecter
             </Button>
           </form>
 
-          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-secondary)' }}>
+          {/* Footer link */}
+          <p
+            className="text-center text-sm mt-6"
+            style={{ color: 'var(--text-muted)' }}
+          >
             Pas encore de compte ?{' '}
-            <Link to="/signup" className="text-cyber-cyan hover:text-white transition-colors">
+            <Link
+              to="/signup"
+              className="font-semibold transition-colors"
+              style={{ color: 'var(--primary)' }}
+            >
               Créer un compte
             </Link>
           </p>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 }
