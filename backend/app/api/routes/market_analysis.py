@@ -534,33 +534,37 @@ async def gnn_predict(
         if not wm.is_available():
             raise ConnectionError("neo4j_unavailable")
 
-        # Causal + structural relations only — MENTIONS is deliberately excluded
-        # (semantic / informational, not a propagation edge).
-        # hops=3 to allow synthetic mechanism chains (4-hop max) to surface.
+        # Causal + structural relations only — MENTIONS is deliberately excluded.
+        # hops=2 keeps the base snapshot small (faster TGAT inference).
+        # SyntheticEnricher adds mechanism nodes on top, so 2-hop chains still reach
+        # exposure nodes via: Entity→M1→M2→ExposureNode→Talan (4 hops).
         kg_snapshot = wm.get_snapshot(
-            "Talan", hops=3,
+            "Talan", hops=2,
             rel_whitelist=[
                 "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
                 "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
-                "SERVES_SECTOR", "OPERATES_BU", "BU_SERVES",
-                "BU_DEPENDS_ON", "AFFECTS_INDICATOR", "TRIGGERS_EVENT",
-                "SUPPLY_CHAIN_LINK", "ACQUIRED", "LAUNCHED",
-                # synthetic mechanism edges
-                "DRIVES", "ENABLES", "ACCELERATES", "GENERATES",
-                "SLOWS", "DELAYS", "RESTRICTS", "FREEZES",
-                "REDUCES", "INCREASES", "REGULATES", "DEPENDS_ON",
+                "SERVES_SECTOR", "AFFECTS_INDICATOR", "TRIGGERS_EVENT",
+                "SUPPLY_CHAIN_LINK", "ACQUIRED",
+                # synthetic mechanism edges (not in Neo4j, but hint to keep whitelist consistent)
+                "DRIVES", "ENABLES", "REDUCES", "RESTRICTS", "GENERATES", "DEPENDS_ON",
             ],
         )
-        price_data = MarketDataCollector().fetch_price_snapshot()
+        # Price data is used for market signals but not for propagation paths.
+        # Skip to avoid 5-second Yahoo Finance network call on every prediction.
+        price_data = None
 
         # ── SyntheticEnricher: inject dramatic multi-hop mechanism chains ─────
         # This applies the 21 event-category templates to ALL real entities in
         # the snapshot, creating 3-4 hop chains:
         #   EVENT → MECHANISM → SECONDARY EFFECT → EXPOSURE → Talan
         try:
-            recent_rows = MarketAnalyst().get_recent_analyses(hours=168, limit=200)
+            # Limit to 30 recent analyses (not 200) to keep enrichment fast.
+            # The SyntheticEnricher also processes snapshot entities, so we get
+            # coverage from the KG even with a small analysis window.
+            recent_rows = MarketAnalyst().get_recent_analyses(hours=168, limit=30)
             entity_title_map: dict = {}
             extracted_entities_for_enricher: list = []
+            seen_ent_names: set = set()
             for row in recent_rows:
                 row_title    = row.get("article_title") or ""
                 row_entities = row.get("entities") or []
@@ -571,7 +575,8 @@ async def gnn_predict(
                     name = ent.get("name") if isinstance(ent, dict) else None
                     if name and row_title and name not in entity_title_map:
                         entity_title_map[name] = row_title
-                    if isinstance(ent, dict) and ent.get("name"):
+                    if isinstance(ent, dict) and ent.get("name") and ent["name"] not in seen_ent_names:
+                        seen_ent_names.add(ent["name"])
                         etype = (ent.get("type") or ent.get("label") or "company").lower()
                         extracted_entities_for_enricher.append({
                             "name": ent["name"],

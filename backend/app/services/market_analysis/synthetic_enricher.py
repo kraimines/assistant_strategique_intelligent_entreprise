@@ -109,17 +109,15 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "central bank", "rate policy", "inflation target"],
         ["macro_indicator", "regulation", "event", "person"],
         [
-            # NEGATIVE: rate hikes → capex squeeze
+            # NEGATIVE: rate hikes → capex squeeze (2 hops)
             (-1.0, [
-                ("Financing Cost Increase",       "MacroIndicator", "RESTRICTS",    -0.85),
-                ("Corporate Capital Expenditure Freeze", "MacroIndicator", "REDUCES", -0.82),
-                ("Enterprise IT Budget Cuts",     "MacroIndicator", "DELAYS",       -0.80),
+                ("Financing Cost Surge",          "MacroIndicator", "RESTRICTS",    -0.85),
+                ("Enterprise IT Budget Cuts",     "MacroIndicator", "REDUCES",      -0.82),
             ], "Enterprise Innovation Budget"),
-            # POSITIVE: rate cuts → investment surge
+            # POSITIVE: rate cuts → investment surge (2 hops)
             (+1.0, [
-                ("Financing Cost Decrease",       "MacroIndicator", "ENABLES",      +0.85),
-                ("Corporate Capex Recovery",      "MacroIndicator", "DRIVES",       +0.82),
-                ("Digital Transformation Acceleration", "MarketTrend", "GENERATES", +0.85),
+                ("Financing Cost Relief",         "MacroIndicator", "ENABLES",      +0.85),
+                ("Digital Transformation Budgets","MarketTrend",    "DRIVES",       +0.85),
             ], "Enterprise Innovation Budget"),
         ],
     ),
@@ -132,17 +130,15 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "compliance deadline", "compliance requirement", "regulation enforcement"],
         ["regulation", "event"],  # keyword-match only — avoids triggering on every country
         [
-            # POSITIVE: regulation → compliance consulting boom
+            # POSITIVE: regulation → compliance consulting boom (2 hops)
             (+1.0, [
                 ("Compliance Audit Requirements", "Regulation", "REGULATES",   +0.90),
-                ("Governance & Risk Management",  "Sector",     "DRIVES",      +0.88),
                 ("Enterprise Compliance Consulting", "Sector",  "GENERATES",   +0.95),
             ], "Cybersecurity Compliance"),
-            # POSITIVE alternative: security certifications
+            # POSITIVE: security certifications (2 hops)
             (+1.0, [
-                ("Data Privacy & Security Mandates", "Regulation", "REGULATES", +0.85),
-                ("Infrastructure Security Upgrades", "Sector",     "DRIVES",    +0.83),
-                ("Security Implementation Services", "Sector",     "GENERATES", +0.90),
+                ("Security Audit Mandates",        "Regulation", "REGULATES",  +0.85),
+                ("Security Implementation Services","Sector",    "GENERATES",  +0.90),
             ], "Cybersecurity Demand"),
         ],
     ),
@@ -155,10 +151,9 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "payroll system", "hr compliance", "tax compliance"],
         ["regulation", "event"],  # not "country" — would match all countries
         [
-            # POSITIVE: law change → system upgrade demand
+            # POSITIVE: law change → system upgrade demand (2 hops)
             (+1.0, [
-                ("HR/Payroll System Upgrade Mandate", "Regulation", "REGULATES", +0.80),
-                ("Enterprise HR Modernization",       "Sector",     "DRIVES",    +0.78),
+                ("HR/Payroll Compliance Mandate",     "Regulation", "REGULATES", +0.80),
                 ("HR Technology Consulting",          "Sector",     "GENERATES", +0.85),
             ], "Enterprise IT Services"),
         ],
@@ -177,17 +172,15 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "tech export control", "beijing summit"],
         ["event", "person", "macro_indicator"],  # keyword-only match for specific trade events
         [
-            # NEGATIVE: trade tensions rise
+            # NEGATIVE: trade tensions (2 hops)
             (-1.0, [
                 ("Semiconductor Export Restrictions", "Regulation",     "RESTRICTS",  -0.88),
-                ("AI Hardware Cost & Scarcity",       "MacroIndicator", "SLOWS",     -0.85),
-                ("Enterprise AI Project Delays",      "MarketTrend",    "REDUCES",   -0.82),
+                ("Enterprise AI Project Delays",      "MarketTrend",    "REDUCES",    -0.85),
             ], "AI Consulting Demand"),
-            # POSITIVE: trade stabilization
+            # POSITIVE: trade stabilization (2 hops)
             (+1.0, [
-                ("AI Chip Export Recovery",           "MacroIndicator", "ENABLES",     +0.85),
-                ("Enterprise AI Hardware Availability", "MacroIndicator", "ACCELERATES", +0.87),
-                ("GenAI Integration Consulting Surge", "Sector",         "GENERATES",   +0.92),
+                ("AI Chip Supply Recovery",            "MacroIndicator", "ENABLES",    +0.85),
+                ("GenAI Integration Consulting Surge", "Sector",         "GENERATES",  +0.92),
             ], "AI Consulting Demand"),
         ],
     ),
@@ -201,16 +194,14 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "sanctions regime", "trade embargo"],
         ["event", "country", "region"],
         [
-            # NEGATIVE: conflict/war
+            # NEGATIVE: conflict/war (2 hops)
             (-1.0, [
-                ("Geopolitical Risk Premium Rise",    "MacroIndicator", "AFFECTS_INDICATOR", -0.82),
-                ("Supply Chain Disruption",           "MacroIndicator", "REDUCES",           -0.80),
-                ("Enterprise Investment Freeze",      "MacroIndicator", "DELAYS",            -0.85),
+                ("Geopolitical Risk Premium Rise",    "MacroIndicator", "REDUCES",    -0.82),
+                ("Enterprise Investment Freeze",      "MacroIndicator", "DELAYS",     -0.85),
             ], "European IT Market"),
-            # POSITIVE: stabilization
+            # POSITIVE: stabilization (2 hops)
             (+1.0, [
-                ("Geopolitical Risk Normalization",   "MacroIndicator", "ENABLES",    +0.70),
-                ("Supply Chain Confidence Recovery",  "MacroIndicator", "DRIVES",     +0.75),
+                ("Supply Chain Confidence Recovery",  "MacroIndicator", "ENABLES",    +0.75),
                 ("Digital Infrastructure Investment", "Sector",         "GENERATES",  +0.80),
             ], "Digital Transformation"),
         ],
@@ -224,16 +215,14 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "commodity shock", "energy prices", "barrel price", "fuel prices"],
         ["event", "macro_indicator", "country"],
         [
-            # NEGATIVE: oil shock
+            # NEGATIVE: oil shock (2 hops)
             (-1.0, [
-                ("Oil Price Spike",                   "MacroIndicator", "DRIVES",     -0.82),
-                ("Global Inflation Acceleration",     "MacroIndicator", "REDUCES",    -0.85),
+                ("Oil-Driven Cost Inflation",         "MacroIndicator", "REDUCES",    -0.85),
                 ("IT Innovation Budget Freeze",       "MacroIndicator", "DELAYS",     -0.88),
             ], "Enterprise Innovation Budget"),
-            # POSITIVE: stabilization
+            # POSITIVE: energy stabilization (2 hops)
             (+1.0, [
                 ("Energy Price Stabilization",        "MacroIndicator", "ENABLES",    +0.75),
-                ("Inflation Trajectory Improvement",  "MacroIndicator", "ACCELERATES", +0.78),
                 ("Enterprise Investment Resumption",  "Sector",         "DRIVES",     +0.80),
             ], "Digital Transformation"),
         ],
@@ -251,16 +240,14 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "margin compression", "cost spiral", "wage inflation", "price spiral"],
         ["macro_indicator", "event"],
         [
-            # NEGATIVE: inflation crisis
+            # NEGATIVE: inflation → IT freeze (2 hops)
             (-1.0, [
-                ("Enterprise Margin Compression",     "MacroIndicator", "SLOWS",      -0.80),
-                ("Cost Control Initiatives",          "MacroIndicator", "REDUCES",    -0.78),
-                ("Discretionary IT Budget Freeze",    "MacroIndicator", "IMPACTS",    -0.82),
+                ("Enterprise Margin Compression",     "MacroIndicator", "REDUCES",    -0.80),
+                ("Discretionary IT Budget Freeze",    "MacroIndicator", "DELAYS",     -0.82),
             ], "IT Consulting Market"),
-            # POSITIVE: optimization demand from pressure
+            # POSITIVE: optimization demand (2 hops)
             (+1.0, [
                 ("Cost Optimization Mandate",         "MacroIndicator", "DRIVES",     +0.75),
-                ("Process Automation Demand",         "MarketTrend",    "ACCELERATES", +0.78),
                 ("Efficiency-Focused AI Consulting",  "Sector",         "GENERATES",  +0.82),
             ], "AI Consulting Demand"),
         ],
@@ -275,16 +262,14 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "equity market", "market volatility"],
         ["macro_indicator", "event"],
         [
-            # NEGATIVE: crash
+            # NEGATIVE: market crash (2 hops)
             (-1.0, [
                 ("Investor Confidence Collapse",      "MacroIndicator", "REDUCES",    -0.85),
-                ("CFO Risk Aversion Rise",            "MacroIndicator", "DELAYS",     -0.82),
                 ("Enterprise IT Budget Contraction",  "Sector",         "IMPACTS",    -0.80),
             ], "Enterprise IT Services"),
-            # POSITIVE: recovery
+            # POSITIVE: market recovery (2 hops)
             (+1.0, [
-                ("Investor Confidence Recovery",      "MacroIndicator", "ACCELERATES", +0.80),
-                ("Enterprise Appetite for Growth",    "MacroIndicator", "DRIVES",     +0.78),
+                ("Investor Confidence Recovery",      "MacroIndicator", "DRIVES",     +0.80),
                 ("Digital Transformation Pipeline",   "Sector",         "GENERATES",  +0.85),
             ], "Digital Transformation"),
         ],
@@ -298,16 +283,14 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "lending freeze", "banking stress", "credit tightening"],
         ["event", "macro_indicator"],
         [
-            # NEGATIVE: crisis
+            # NEGATIVE: credit crisis (2 hops)
             (-1.0, [
                 ("Credit Market Tightening",          "MacroIndicator", "RESTRICTS",  -0.85),
-                ("Corporate Access to Capital Cuts",  "MacroIndicator", "REDUCES",    -0.82),
-                ("IT Project Funding Deferrals",      "Sector",         "DELAYS",     -0.80),
+                ("IT Project Funding Deferrals",      "Sector",         "DELAYS",     -0.82),
             ], "Enterprise Innovation Budget"),
-            # POSITIVE: stabilization
+            # POSITIVE: credit recovery (2 hops)
             (+1.0, [
                 ("Credit Market Normalization",       "MacroIndicator", "ENABLES",    +0.80),
-                ("Corporate Capex Acceleration",      "MacroIndicator", "DRIVES",     +0.78),
                 ("Digital Infrastructure Projects",   "Sector",         "GENERATES",  +0.82),
             ], "Enterprise IT Services"),
         ],
@@ -325,17 +308,15 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "machine learning", "neural network", "transformer", "ai training"],
         ["technology", "market_trend", "event"],
         [
-            # POSITIVE: breakthrough
+            # POSITIVE: AI breakthrough (2 hops)
             (+1.0, [
-                ("Enterprise AI Capability Assessment", "MarketTrend",  "DRIVES",     +0.90),
-                ("AI Implementation Roadmapping",       "Sector",       "ACCELERATES", +0.88),
-                ("AI Strategy & Integration Consulting", "Sector",      "GENERATES",  +0.95),
+                ("Enterprise AI Budget Surge",          "MarketTrend",  "DRIVES",     +0.90),
+                ("AI Strategy & Integration Consulting","Sector",       "GENERATES",  +0.95),
             ], "AI Consulting Demand"),
-            # POSITIVE: migration wave
+            # POSITIVE: migration wave (2 hops)
             (+1.0, [
-                ("Legacy System Modernization Mandate", "MarketTrend",  "DRIVES",     +0.85),
-                ("Cloud & AI Infrastructure Migration", "Sector",       "GENERATES",  +0.87),
-                ("Migration & Transformation Services",  "Sector",       "ACCELERATES", +0.90),
+                ("Legacy Modernization Mandate",        "MarketTrend",  "DRIVES",     +0.85),
+                ("Migration & Transformation Services", "Sector",       "GENERATES",  +0.90),
             ], "Digital Transformation"),
         ],
     ),
@@ -348,11 +329,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "cloud infrastructure", "cloud modernization"],
         ["technology", "company", "market_trend"],
         [
-            # POSITIVE: new capabilities
+            # POSITIVE: cloud shift (2 hops)
             (+1.0, [
-                ("Cloud Capability Expansion",        "MarketTrend",    "DRIVES",     +0.83),
-                ("Enterprise Cloud Modernization",    "Sector",         "ACCELERATES", +0.82),
-                ("Cloud Architecture & Migration Services", "Sector",    "GENERATES",  +0.88),
+                ("Enterprise Cloud Modernization",    "MarketTrend",    "DRIVES",     +0.83),
+                ("Cloud Architecture & Migration",    "Sector",         "GENERATES",  +0.88),
             ], "Cloud Services Spending"),
         ],
     ),
@@ -364,11 +344,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "ransomware", "data breach", "security threat", "exploit", "malware"],
         ["event", "technology", "regulation"],
         [
-            # POSITIVE: threat → security investment
+            # POSITIVE: security threat → audit surge (2 hops)
             (+1.0, [
                 ("Enterprise Security Urgency Rise",   "MacroIndicator", "DRIVES",    +0.88),
-                ("Cybersecurity Audit Expansion",      "Sector",         "GENERATES", +0.90),
-                ("Security Compliance Services",       "Sector",         "ACCELERATES", +0.93),
+                ("Security Compliance Services",       "Sector",         "GENERATES", +0.93),
             ], "Cybersecurity Demand"),
         ],
     ),
@@ -384,11 +363,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "private equity", "pe buyout", "acquisition completed", "merger deal"],
         ["event", "company"],
         [
-            # POSITIVE: M&A → integration
+            # POSITIVE: M&A → integration (2 hops)
             (+1.0, [
-                ("Enterprise Integration Project Surge", "MarketTrend",  "DRIVES",    +0.88),
-                ("IT Systems Consolidation",             "Sector",       "GENERATES", +0.85),
-                ("Integration & Transformation Consulting", "Sector",    "ACCELERATES", +0.90),
+                ("Enterprise Integration Projects",     "MarketTrend",  "DRIVES",    +0.88),
+                ("Integration & Transformation Consulting","Sector",    "GENERATES", +0.90),
             ], "Enterprise IT Services"),
         ],
     ),
@@ -400,11 +378,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "competitive threat", "competitor success", "market pressure", "competitive challenge"],
         ["event", "company"],
         [
-            # POSITIVE: pressure drives transformation
+            # POSITIVE: competitive pressure → automation (2 hops)
             (+1.0, [
                 ("Margin Protection Initiative",       "MarketTrend",    "DRIVES",    +0.78),
-                ("Cost Efficiency Modernization",      "Sector",         "GENERATES", +0.80),
-                ("Process Automation Consulting",      "Sector",         "ACCELERATES", +0.85),
+                ("Process Automation Consulting",      "Sector",         "GENERATES", +0.85),
             ], "AI Consulting Demand"),
         ],
     ),
@@ -416,11 +393,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "pricing collapse", "competitive intensity", "price competition"],
         ["event", "macro_indicator"],
         [
-            # POSITIVE: efficiency drive
+            # POSITIVE: pricing pressure → automation (2 hops)
             (+1.0, [
                 ("Cost Per Unit Reduction Mandate",    "MacroIndicator", "DRIVES",    +0.75),
-                ("Process Efficiency Programs",        "Sector",         "GENERATES", +0.78),
-                ("Automation & AI Optimization",       "Sector",         "ACCELERATES", +0.82),
+                ("Automation & AI Optimization",       "Sector",         "GENERATES", +0.82),
             ], "AI Consulting Demand"),
         ],
     ),
@@ -437,17 +413,15 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "tech layoff", "talent exodus", "mass termination", "rif", "severance"],
         ["event"],
         [
-            # POSITIVE: talent surplus → hiring costs drop → margins improve
+            # POSITIVE: layoffs → talent surplus → growth resumes (2 hops)
             (+1.0, [
-                ("Talent Market Supply Abundance",     "MacroIndicator", "ENABLES",   +0.65),
-                ("Hiring Cost Reduction",              "MacroIndicator", "ACCELERATES", +0.68),
+                ("Hiring Cost Reduction",              "MacroIndicator", "ENABLES",   +0.68),
                 ("Growth Initiative Reactivation",     "Sector",         "DRIVES",    +0.70),
             ], "Enterprise Innovation Budget"),
-            # POSITIVE: retention pressure → HR systems upgrade
+            # POSITIVE: retention pressure → HR IT upgrade (2 hops)
             (+1.0, [
                 ("Employee Retention Urgency Rise",    "MacroIndicator", "DRIVES",    +0.72),
-                ("HR/Talent Management Modernization", "Sector",         "GENERATES", +0.75),
-                ("HR Technology & Analytics Services", "Sector",         "ACCELERATES", +0.78),
+                ("HR Technology & Analytics Services", "Sector",         "GENERATES", +0.78),
             ], "Enterprise IT Services"),
         ],
     ),
@@ -459,11 +433,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "engineer shortage", "recruitment challenge", "talent war", "compensation pressure"],
         ["event", "macro_indicator"],
         [
-            # POSITIVE: shortage → demand for efficiency
+            # POSITIVE: talent shortage → automation demand (2 hops)
             (+1.0, [
-                ("Salary & Compensation Escalation",   "MacroIndicator", "DRIVES",    +0.70),
-                ("Process Automation Mandate",         "Sector",         "GENERATES", +0.75),
-                ("Staffing Efficiency Consulting",     "Sector",         "ACCELERATES", +0.78),
+                ("Salary Escalation Pressure",         "MacroIndicator", "DRIVES",    +0.70),
+                ("Staffing Efficiency Consulting",     "Sector",         "GENERATES", +0.78),
             ], "AI Consulting Demand"),
         ],
     ),
@@ -475,11 +448,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "digital literacy", "staff training", "capability building"],
         ["event", "market_trend"],
         [
-            # POSITIVE: training drive
+            # POSITIVE: reskilling → IT consulting (2 hops)
             (+1.0, [
-                ("Digital Skills Development Mandate", "MarketTrend",    "DRIVES",    +0.72),
-                ("Training Infrastructure Investment", "Sector",         "GENERATES", +0.73),
-                ("Digital Training & Development Services", "Sector",    "ACCELERATES", +0.75),
+                ("Digital Skills Investment Surge",    "MarketTrend",    "DRIVES",    +0.72),
+                ("Digital Training & Development Services","Sector",     "GENERATES", +0.75),
             ], "Enterprise IT Services"),
         ],
     ),
@@ -494,16 +466,14 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "chip availability", "gpu shortage", "compute availability"],
         ["company", "technology"],
         [
-            # POSITIVE: chip availability
+            # POSITIVE: chip availability (2 hops)
             (+1.0, [
-                ("AI Infrastructure Availability Rise", "MacroIndicator", "ENABLES",     +0.88),
                 ("GenAI Project Acceleration",          "MarketTrend",    "DRIVES",      +0.90),
                 ("AI Integration & Consulting",         "Sector",         "GENERATES",   +0.95),
             ], "AI Consulting Demand"),
-            # NEGATIVE: scarcity
+            # NEGATIVE: scarcity (2 hops)
             (-1.0, [
                 ("AI Compute Scarcity Crisis",          "MacroIndicator", "SLOWS",       -0.82),
-                ("Enterprise AI Project Delays",        "MarketTrend",    "REDUCES",     -0.78),
                 ("Consulting Pipeline Slowdown",        "Sector",         "IMPACTS",     -0.75),
             ], "AI Consulting Demand"),
         ],
@@ -515,17 +485,15 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "wealth management", "payment", "asset management"],
         ["company", "sector"],
         [
-            # POSITIVE: banking digital transformation
+            # POSITIVE: banking digital transformation (2 hops)
             (+1.0, [
                 ("Banking AI & Digital Modernization",  "MarketTrend",    "DRIVES",      +0.85),
-                ("Banking Systems Modernization",       "MacroIndicator", "ACCELERATES", +0.82),
                 ("Banking Consulting Contracts",        "Sector",         "GENERATES",   +0.88),
             ], "Banking IT Budgets"),
-            # NEGATIVE: sector weakness
+            # NEGATIVE: banking sector weakness (2 hops)
             (-1.0, [
                 ("Banking Margin Pressure",             "MacroIndicator", "REDUCES",     -0.78),
-                ("Bank IT Budget Freeze",               "MacroIndicator", "DELAYS",      -0.75),
-                ("Financial Services Consulting Decline", "Sector",       "IMPACTS",     -0.72),
+                ("Financial Services Consulting Decline","Sector",        "IMPACTS",     -0.72),
             ], "Financial Services IT"),
         ],
     ),
@@ -537,11 +505,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
          "ministry", "administration", "state agency"],
         ["event", "regulation"],  # keyword-only to avoid triggering on all countries
         [
-            # POSITIVE: government digital programs
+            # POSITIVE: government digital programs (2 hops)
             (+1.0, [
-                ("Public Sector Digital Transformation", "MarketTrend",   "DRIVES",     +0.90),
-                ("Government IT Modernization Contracts", "MacroIndicator", "GENERATES", +0.87),
-                ("Public Cloud & Integration Services",   "Sector",        "ACCELERATES", +0.85),
+                ("Public Sector Digitalization Wave",    "MarketTrend",   "DRIVES",     +0.90),
+                ("Public Cloud & Integration Services",  "Sector",        "GENERATES",  +0.85),
             ], "Public Sector IT"),
         ],
     ),

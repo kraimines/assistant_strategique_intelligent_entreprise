@@ -609,7 +609,7 @@ class GNNPredictor:
         prop_paths = _extract_propagation_paths(
             snapshot, predictions,
             entity_title_map=snapshot.get("entity_title_map"),
-            max_hops=5,   # synthetic 4-node chains need 5 hops: Entity→M1→M2→M3→Exposure→Talan
+            max_hops=4,   # synthetic 2-node chains: Entity→M1→M2→Exposure→Talan = 4 hops
         )
 
         logger.info(

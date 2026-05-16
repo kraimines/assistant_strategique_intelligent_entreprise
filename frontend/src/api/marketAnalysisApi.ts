@@ -314,7 +314,7 @@ export const marketAnalysisApi = {
 
   // GNN
   gnnPredict: (trigger = 'on_demand') =>
-    api.get<GNNResult>('/market/gnn/predict', { params: { trigger } }),
+    api.get<GNNResult>('/market/gnn/predict', { params: { trigger }, timeout: 120_000 }),
 
   // Prices
   getPrices: () =>
