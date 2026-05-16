@@ -1,0 +1,8 @@
+# GNN Visualization dependencies
+# pip install -r requirements_viz.txt
+
+streamlit>=1.35.0
+pyvis>=0.3.2
+networkx>=3.3
+plotly>=5.22.0
+pandas>=2.2.0

@@ -99,19 +99,34 @@ Return a SINGLE valid JSON object — no markdown fences, no prose, no extra key
 - **Event**: Discrete occurrence (G7 summit, ECB rate decision, product launch event)
 - **MacroIndicator**: Economic index or metric (CAC40, VIX, EUR/USD, Oil_Brent, GDP_Growth)
 
-### Relation type selection:
-- **ACQUIRED**: Company A acquired / merged with Company B (M&A)
-- **COMPETES_WITH**: Two companies in direct competition (same market / clients)
-- **INFLUENCES**: Entity A has causal or strategic influence on Entity B (not direct competition)
-- **LAUNCHED**: Entity launched a technology or product
-- **IMPACTS**: Event / regulation / trend impacts a company (general impact, less specific than CAUSES_IMPACT_ON)
-- **RECRUITS_IN**: Company is actively hiring in a skill / country / sector
-- **CAUSES_IMPACT_ON**: Strong quantified causal relation with measurable financial/operational impact
-- **BELONGS_TO_SECTOR**: Company → Sector
-- **SUPPLY_CHAIN_LINK**: Supplier → Customer supply chain dependency
-- **OPERATES_IN**: Company → Country/Region
-- **TRIGGERS_EVENT**: Entity triggers a market event
-- **AFFECTS_INDICATOR**: Event → MacroIndicator
+### Relation type selection — use the STRONGEST semantic type applicable:
+| Relation | Weight | Use when |
+|---|---|---|
+| **IMPACTS** | 1.0 | Direct, measurable causal impact |
+| **CAUSES_IMPACT_ON** | 1.0 | Quantified financial/operational causal effect |
+| **DEPENDS_ON** | 0.9 | Entity B depends structurally on Entity A |
+| **REGULATES** | 0.9 | Regulation or government controls entity |
+| **SUPPLY_CHAIN_LINK** | 0.8 | Supply-chain dependency |
+| **INVESTS_IN** | 0.75 | Capital / investment flow |
+| **COMPETES_WITH** | 0.7 | Direct market competition |
+| **INFLUENCES** | 0.65 | Strategic/indirect causal influence |
+| **TRIGGERS_EVENT** | 0.65 | Entity causes a market event to occur |
+| **AFFECTS_INDICATOR** | 0.6 | Event → MacroIndicator change |
+| **OPERATES_IN** | 0.6 | Geographic presence |
+| **BELONGS_TO_SECTOR** | 0.6 | Sector membership |
+| **CORRELATED_WITH** | 0.4 | Statistical correlation, not causal |
+| **ACQUIRED** | 0.85 | M&A |
+| **LAUNCHED** | 0.7 | Product/service launch |
+| **RECRUITS_IN** | 0.5 | Talent market signal |
+| **MENTIONS** | 0.15 | **AVOID** — use only as last resort for informational references |
+
+**CRITICAL**: Prefer IMPACTS, DEPENDS_ON, REGULATES over MENTIONS.
+Build economic mechanism chains — not just direct entity references.
+
+**REQUIRED multi-hop chain examples**:
+- Trump-Xi summit → US-China Trade Stabilization → IMPACTS → AI Export Controls → REGULATES → AI Chip Supply → DEPENDS_ON → European AI Infrastructure → DRIVES → AI Consulting Demand → DEPENDS_ON → Talan
+- S&P 500 rally → AFFECTS_INDICATOR → Enterprise IT Budgets → IMPACTS → Digital Transformation Spending → DRIVES → Consulting Demand → DEPENDS_ON → Talan
+- EU AI Act → REGULATES → AI Compliance Consulting → DRIVES → Consulting Demand → DEPENDS_ON → Talan
 
 ### Impact score guidelines:
 - -1.0 = catastrophic (bankruptcy, >40% revenue loss)
@@ -126,10 +141,15 @@ Return a SINGLE valid JSON object — no markdown fences, no prose, no extra key
 
 ## EXTRACTION RULES
 
-1. **Minimum 5 entities** per article (even for thin content — infer key players).
-2. **Minimum 4 relations** — always include at least 1 second-order causal chain.
-3. **Entity resolution**: Always use canonical English names. Microsoft ≠ MSFT ≠ Microsoft Corp.
-4. **Talan inclusion**: ALWAYS add Talan (type: company, ticker: TAL.PA) if the event affects:
+1. **Minimum 8 entities** per article — infer key players AND economic mechanism nodes.
+2. **Minimum 6 relations** — build at least 2 multi-hop causal chains (3+ hops each).
+3. **Economic mechanism nodes**: For each event, identify intermediate economic mechanisms:
+   - Political event → policy change → market impact → sector effect → Talan
+   - Tech disruption → adoption curve → enterprise spending → consulting demand → Talan
+   - Regulation → compliance cost → budget reallocation → IT spending → Talan
+4. **NEVER use MENTIONS as the primary link to Talan** — always find the economic mechanism.
+5. **Entity resolution**: Always use canonical English names. Microsoft ≠ MSFT ≠ Microsoft Corp.
+6. **Talan inclusion**: ALWAYS add Talan (type: company, ticker: TAL.PA) if the event affects:
    - EU/French digital policy, AI regulation, banking/insurance (Talan's main clients)
    - IT consulting market, ESN sector, digital transformation budgets
    - Any competitor in the list (Capgemini, Sopra Steria, Atos, Accenture...)

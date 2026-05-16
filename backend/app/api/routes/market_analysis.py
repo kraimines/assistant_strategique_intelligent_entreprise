@@ -511,23 +511,40 @@ async def gnn_predict(
     trigger: str = Query("on_demand", description="Trigger event description"),
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    try:
+    import asyncio
+    import json as _json
+
+    def _run_gnn_sync() -> Dict[str, Any]:
+        from pathlib import Path as _P
         from app.services.market_analysis.world_model import WorldModel
         from app.services.market_analysis.gnn_predictor import GNNPredictor
         from app.services.market_analysis.collector import MarketDataCollector
-
         from app.services.market_analysis.analyst import NewsAnalyst as MarketAnalyst
+        from app.services.market_analysis.policy import EdgeTypePolicy
+        from app.services.market_analysis.scoring.hub_penalty import HubPenalty
+        from app.services.market_analysis.scoring.temporal_decay import TemporalDecay
+        from app.services.market_analysis.scoring.plausibility import PlausibilityScorer
+        from app.services.market_analysis.scoring.calibration import TGATCalibrator
+        from app.services.market_analysis.ranking import PathRanker
+        from app.services.market_analysis.explain.explanation_generator import ExplanationGenerator
 
         wm = WorldModel()
         if not wm.is_available():
-            raise HTTPException(status_code=503, detail="Neo4j unavailable")
+            raise ConnectionError("neo4j_unavailable")
 
-        # hops=2 keeps the snapshot small and inference fast
-        kg_snapshot = wm.get_snapshot("Talan", hops=2)
-        price_data  = MarketDataCollector().fetch_price_snapshot()
+        # Causal + structural relations only — MENTIONS is deliberately excluded
+        # (semantic / informational, not a propagation edge).
+        kg_snapshot = wm.get_snapshot(
+            "Talan", hops=2,
+            rel_whitelist=[
+                "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
+                "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
+                "SERVES_SECTOR", "OPERATES_BU", "BU_SERVES",
+                "BU_DEPENDS_ON",
+            ],
+        )
+        price_data = MarketDataCollector().fetch_price_snapshot()
 
-        # Enrich snapshot with article headlines (entity_name → title)
-        import json as _json
         try:
             recent_rows = MarketAnalyst().get_recent_analyses(hours=168, limit=100)
             entity_title_map: dict = {}
@@ -543,165 +560,12 @@ async def gnn_predict(
                         entity_title_map[name] = row_title
             kg_snapshot["entity_title_map"] = entity_title_map
         except Exception:
-            pass  # enrichment is best-effort — don't block inference
+            pass
 
-        gnn    = GNNPredictor()
-        result = gnn.predict(kg_snapshot, price_data=price_data, trigger_event=trigger)
-        return result.model_dump()
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── Human-in-the-loop: natural-language what-if simulation ───────────────────
-
-@router.post(
-    "/market/simulate",
-    summary="Simulate impact of a free-text event on Talan",
-    description=(
-        "The manager describes an event in plain text. The LLM extracts entities "
-        "and causal relations automatically (same analyst as the live pipeline), "
-        "then the GNN propagation engine predicts Talan's impact. Transient by "
-        "default — set commit=true to persist the scenario to Neo4j."
-    ),
-)
-async def simulate_event(
-    payload: QuickSimulationRequest,
-    commit: bool = Query(False, description="Persist the extracted scenario to Neo4j"),
-    current_user: dict = Depends(get_current_user),
-) -> Dict[str, Any]:
-    from uuid import uuid4
-    from datetime import datetime, timezone
-    from app.services.market_analysis.analyst import NewsAnalyst
-    from app.services.market_analysis.world_model import WorldModel
-    from app.services.market_analysis.gnn_predictor import GNNPredictor
-    from app.services.market_analysis.policy import EdgeTypePolicy
-    from app.services.market_analysis.scoring import (
-        HubPenalty, TemporalDecay, TGATCalibrator, PlausibilityScorer,
-    )
-    from app.services.market_analysis.ranking import PathRanker
-    from app.services.market_analysis.explain import ExplanationGenerator
-    from pathlib import Path as _P
-
-    try:
-        # ── Step 1: LLM extraction ────────────────────────────────────────────
-        # Treat the free-text event exactly like a news article going through
-        # the live pipeline — the analyst extracts entities + causal relations.
-        analyst = NewsAnalyst()
-        sim_id  = str(uuid4())
-        now     = datetime.now(timezone.utc)
-
-        # Prepend category hint so the LLM contextualises correctly
-        category_hint = f"[Category: {payload.category}]\n\n" if payload.category else ""
-        enriched_text = category_hint + payload.event_text
-
-        analysis = analyst.analyse_article(
-            article_id   = sim_id,
-            external_id  = f"sim_{sim_id[:8]}",
-            title        = payload.event_text[:120],
-            content      = enriched_text,
-            source       = "manual_simulation",
-            published_at = now,
-            language     = "en",
-        )
-
-        if analysis is None:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "Le modèle de langage n'a pas pu analyser cet événement. "
-                    "Vérifiez les quotas LLM et réessayez."
-                ),
-            )
-
-        # ── Step 2: Build KG snapshot + in-memory augmentation ───────────────
-        wm = WorldModel()
-        if not wm.is_available():
-            raise HTTPException(status_code=503, detail="Neo4j unavailable")
-
-        base_snapshot = wm.get_snapshot(
-            "Talan",
-            hops=3,
-            rel_whitelist=[
-                "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
-                "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
-                "SERVES_SECTOR", "OPERATES_BU", "BU_SERVES",
-                "BU_DEPENDS_ON", "MENTIONS",
-            ],
-        )
-
-        # ── Filter extracted entities to only those mentioned in the event text ─
-        # The LLM sometimes infers competitors (e.g. Capgemini) that are not
-        # in the user's text. We keep an entity only if:
-        #   (a) its name appears in the event text (case-insensitive), OR
-        #   (b) it is Talan (always the target), OR
-        #   (c) it is a sector/country/macro node (structural context, not actors)
-        event_text_lower = payload.event_text.lower()
-        structural_types = {"sector", "country", "macroindicator", "regulation", "event"}
-
-        def _entity_is_relevant(e) -> bool:
-            if e.name.lower() == "talan":
-                return True
-            etype = (e.type.value if e.type else "").lower()
-            if etype in structural_types:
-                return True
-            # Check if any word of the entity name appears in the event text
-            name_lower = e.name.lower()
-            words = [w for w in name_lower.split() if len(w) > 3]  # skip short words
-            return name_lower in event_text_lower or any(w in event_text_lower for w in words)
-
-        relevant_entities = [e for e in analysis.entities if _entity_is_relevant(e)]
-        relevant_names    = {e.name for e in relevant_entities}
-
-        # Filter relations: keep only those where both endpoints are relevant
-        relevant_relations = [
-            r for r in analysis.causal_relations
-            if r.from_entity in relevant_names or r.to_entity in relevant_names
-        ]
-
-        logger.info(
-            "Simulation entity filter: %d → %d entities, %d → %d relations",
-            len(analysis.entities), len(relevant_entities),
-            len(analysis.causal_relations), len(relevant_relations),
-        )
-
-        # Convert NewsAnalysis entities/relations → augment_snapshot format
-        manual_entities = [
-            {
-                "name":   e.name,
-                "type":   e.label or e.type.value,
-                "sector": (e.properties or {}).get("sector"),
-                "country":(e.properties or {}).get("country"),
-                "ticker": e.ticker,
-            }
-            for e in relevant_entities
-        ]
-        manual_relations = [
-            {
-                "from_entity":   r.from_entity,
-                "to_entity":     r.to_entity,
-                "relation_type": r.relation_type.value if r.relation_type else "CAUSES_IMPACT_ON",
-                "impact_score":  r.impact_score,
-                "confidence":    r.confidence,
-                "reason":        r.reason,
-                "time_horizon":  r.time_horizon or "short_term",
-                "evidence":      r.evidence or "",
-            }
-            for r in relevant_relations
-        ]
-
-        augmented = wm.augment_snapshot(
-            base_snapshot,
-            manual_entities=manual_entities,
-            manual_relations=manual_relations,
-            news_title=analysis.article_title or payload.event_text[:80],
-            severity=float(analysis.severity or 0.5),
-        )
-
-        # ── Step 3: v3 propagation engine ────────────────────────────────────
+        # v3 ranking pipeline — same wiring as /market/simulate so the
+        # endpoint surfaces director-grade explanations.
         edge_policy  = EdgeTypePolicy.from_world_model(wm)
-        hub_penalty  = HubPenalty.fit(augmented, pagerank=wm.get_pagerank(top_n=200))
+        hub_penalty  = HubPenalty.fit(kg_snapshot, pagerank=wm.get_pagerank(top_n=200))
         temporal_dec = TemporalDecay(edge_policy=edge_policy)
         calibrator   = TGATCalibrator.load(
             _P(__file__).resolve().parent.parent.parent
@@ -718,59 +582,365 @@ async def simulate_event(
 
         gnn    = GNNPredictor()
         result = gnn.predict_v3(
-            augmented, price_data=None,
-            trigger_event=f"sim:{payload.event_text[:60]}",
+            kg_snapshot, price_data=price_data, trigger_event=trigger,
             edge_policy=edge_policy,
             path_ranker=path_ranker,
             explanation_generator=explanation_gen,
-            top_k_paths=10,
+            top_k_paths=15,
         )
+        return result.model_dump()
 
-        # ── Step 4: Optional commit ───────────────────────────────────────────
-        committed = False
-        if commit:
-            wm.commit_simulation(
-                manual_entities=manual_entities,
-                manual_relations=manual_relations,
-                news_title=analysis.article_title or payload.event_text[:80],
-                severity=float(analysis.severity or 0.5),
-                urgency=analysis.urgency or "medium",
-                source="manual_simulation",
+    try:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _run_gnn_sync)
+    except ConnectionError as e:
+        if "neo4j_unavailable" in str(e):
+            raise HTTPException(status_code=503, detail="Neo4j unavailable")
+        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Dedicated explain LLM — enriches paths + generates strategic advice ──────
+
+_EXPLAIN_SYSTEM = """Tu es un conseiller stratégique senior pour Talan (ESN française, 4 000 consultants, spécialisée en transformation numérique, cloud, IA et conseil).
+
+Ta mission : analyser l'impact d'un événement de marché sur Talan et produire :
+1. Pour chaque chemin de propagation : une explication causale précise en français (2-3 phrases) + une recommandation concrète et actionnableque Talan peut mettre en œuvre immédiatement.
+2. Un conseil stratégique global (4-6 phrases en style consulting) qui synthétise la situation et indique clairement ce que Talan devrait faire.
+
+Règles :
+- Sois spécifique à Talan en tant que groupe unique : mentionne ses secteurs clients (banque, assurance, secteur public) et compétences clés (cloud AWS/Azure, IA générative, data engineering). Ne décompose pas Talan en sous-entités ou business units.
+- Les recommandations doivent être actionnables dans les 30-90 jours.
+- Utilise un ton professionnel, direct, sans jargon inutile.
+- Réponds UNIQUEMENT en JSON valide, sans texte avant ou après."""
+
+def _enrich_simulation_with_llm(
+    event_text: str,
+    talan_impact_pct: float,
+    paths: list,
+    llm_callable,
+) -> dict:
+    """One LLM call (explain LLM) to enrich all paths + generate strategic_advice.
+
+    Returns dict with keys:
+      - paths_enrichment: list of {causal_reasoning, recommended_action}
+      - strategic_advice: str
+    """
+    import json as _json
+    import re as _re
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    if not paths:
+        paths_block = "Aucun chemin de propagation identifié."
+    else:
+        lines = []
+        for i, p in enumerate(paths[:15], 1):  # cap at 15 to stay within token budget
+            p_dict = p.model_dump() if hasattr(p, "model_dump") else (p if isinstance(p, dict) else {})
+            source = p_dict.get("source_name", "?")
+            steps  = " → ".join(s.get("node_name", "?") for s in (p_dict.get("steps") or []))
+            impact = p_dict.get("estimated_business_impact_pct", 0.0)
+            lines.append(f"  Chemin {i}: {source} → {steps} → Talan  (impact estimé : {impact:+.1f}%)")
+        paths_block = "\n".join(lines)
+
+    n_paths = min(len(paths), 15)
+    direction = "positif (opportunité)" if talan_impact_pct >= 0 else "négatif (menace)"
+
+    user_msg = f"""Événement analysé : {event_text}
+
+Impact GNN prédit sur Talan : {talan_impact_pct:+.1f}%  ({direction})
+
+{n_paths} chemin(s) de propagation identifiés :
+{paths_block}
+
+Génère le JSON suivant (exactement {n_paths} objets dans "paths") :
+{{
+  "paths": [
+    {{"causal_reasoning": "...", "recommended_action": "..."}},
+    ...
+  ],
+  "strategic_advice": "conseil stratégique global pour Talan (4-6 phrases)"
+}}"""
+
+    try:
+        response = llm_callable([SystemMessage(content=_EXPLAIN_SYSTEM), HumanMessage(content=user_msg)])
+        raw = response.content if hasattr(response, "content") else str(response)
+        # Strip markdown fences
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=_re.MULTILINE)
+        raw = _re.sub(r"\s*```$", "", raw, flags=_re.MULTILINE)
+        data = _json.loads(raw)
+        return {
+            "paths_enrichment": data.get("paths", []),
+            "strategic_advice":  str(data.get("strategic_advice", "")),
+        }
+    except Exception as exc:
+        logger.warning("explain LLM failed: %s", exc)
+        return {"paths_enrichment": [], "strategic_advice": ""}
+
+
+# ── Human-in-the-loop: natural-language what-if simulation ───────────────────
+
+def _run_simulation_sync(
+    event_text: str,
+    category: Optional[str],
+    commit: bool,
+) -> Dict[str, Any]:
+    """All blocking I/O for simulate_event — runs in a thread-pool worker."""
+    from uuid import uuid4
+    from datetime import datetime, timezone
+    from pathlib import Path as _P
+    from app.services.market_analysis.analyst import NewsAnalyst
+    from app.services.market_analysis.world_model import WorldModel
+    from app.services.market_analysis.gnn_predictor import GNNPredictor
+    from app.services.market_analysis.policy import EdgeTypePolicy
+    from app.services.market_analysis.scoring import (
+        HubPenalty, TemporalDecay, TGATCalibrator, PlausibilityScorer,
+    )
+    from app.services.market_analysis.ranking import PathRanker
+    from app.services.market_analysis.explain import ExplanationGenerator
+
+    analyst = NewsAnalyst()
+    sim_id  = str(uuid4())
+    now     = datetime.now(timezone.utc)
+
+    category_hint = f"[Category: {category}]\n\n" if category else ""
+    enriched_text = category_hint + event_text
+
+    analysis = analyst.analyse_article(
+        article_id   = sim_id,
+        external_id  = f"sim_{sim_id[:8]}",
+        title        = event_text[:120],
+        content      = enriched_text,
+        source       = "manual_simulation",
+        published_at = now,
+        language     = "en",
+    )
+
+    if analysis is None:
+        raise ValueError("llm_failed")
+
+    wm = WorldModel()
+    if not wm.is_available():
+        raise ConnectionError("neo4j_unavailable")
+
+    # rel_whitelist=None → toutes les relations Neo4j sont incluses (pas de filtre)
+    # hops=4 → exploration plus profonde du graphe de connaissance
+    base_snapshot = wm.get_snapshot(
+        "Talan",
+        hops=4,
+        rel_whitelist=None,
+    )
+
+    event_text_lower = event_text.lower()
+    structural_types = {"sector", "country", "macroindicator", "regulation", "event"}
+
+    def _entity_is_relevant(e) -> bool:
+        if e.name.lower() == "talan":
+            return True
+        etype = (e.type.value if e.type else "").lower()
+        if etype in structural_types:
+            return True
+        name_lower = e.name.lower()
+        words = [w for w in name_lower.split() if len(w) > 3]
+        return name_lower in event_text_lower or any(w in event_text_lower for w in words)
+
+    relevant_entities  = [e for e in analysis.entities if _entity_is_relevant(e)]
+    relevant_names     = {e.name for e in relevant_entities}
+    relevant_relations = [
+        r for r in analysis.causal_relations
+        if r.from_entity in relevant_names or r.to_entity in relevant_names
+    ]
+
+    logger.info(
+        "Simulation entity filter: %d → %d entities, %d → %d relations",
+        len(analysis.entities), len(relevant_entities),
+        len(analysis.causal_relations), len(relevant_relations),
+    )
+
+    manual_entities = [
+        {
+            "name":   e.name,
+            "type":   e.label or e.type.value,
+            "sector": (e.properties or {}).get("sector"),
+            "country":(e.properties or {}).get("country"),
+            "ticker": e.ticker,
+        }
+        for e in relevant_entities
+    ]
+    manual_relations = [
+        {
+            "from_entity":   r.from_entity,
+            "to_entity":     r.to_entity,
+            "relation_type": r.relation_type.value if r.relation_type else "CAUSES_IMPACT_ON",
+            "impact_score":  r.impact_score,
+            "confidence":    r.confidence,
+            "reason":        r.reason,
+            "time_horizon":  r.time_horizon or "short_term",
+            "evidence":      r.evidence or "",
+        }
+        for r in relevant_relations
+    ]
+
+    augmented = wm.augment_snapshot(
+        base_snapshot,
+        manual_entities=manual_entities,
+        manual_relations=manual_relations,
+        news_title=analysis.article_title or event_text[:80],
+        severity=float(analysis.severity or 0.5),
+    )
+
+    # Inject synthetic economic mechanism nodes + semantic edges
+    from app.services.market_analysis.synthetic_enricher import SyntheticEnricher
+    enricher  = SyntheticEnricher()
+    enriched_entities = [
+        {"name": e.name, "type": e.type.value if e.type else "event",
+         "label": e.label or "Event", "id": e.name}
+        for e in relevant_entities
+    ]
+    augmented = enricher.enrich(augmented, extracted_entities=enriched_entities, published_at=now)
+
+    edge_policy  = EdgeTypePolicy.from_world_model(wm)
+    hub_penalty  = HubPenalty.fit(augmented, pagerank=wm.get_pagerank(top_n=200))
+    temporal_dec = TemporalDecay(edge_policy=edge_policy)
+    calibrator   = TGATCalibrator.load(
+        _P(__file__).resolve().parent.parent.parent
+        / "services" / "market_analysis" / "checkpoints" / "tgat_calibrator.pkl"
+    )
+    talan_profile   = wm.get_talan_profile()
+    plausibility    = PlausibilityScorer(talan_profile=talan_profile, llm_judge=None)
+    path_ranker     = PathRanker(
+        hub_penalty=hub_penalty, temporal_decay=temporal_dec,
+        plausibility_scorer=plausibility, calibrator=calibrator,
+        edge_policy=edge_policy,
+    )
+    explanation_gen = ExplanationGenerator(talan_profile=talan_profile)
+
+    gnn    = GNNPredictor()
+    result = gnn.predict_v3(
+        augmented, price_data=None,
+        trigger_event=f"sim:{event_text[:60]}",
+        edge_policy=None,        # pas de gate — toutes les relations sont visibles
+        path_ranker=path_ranker,
+        explanation_generator=explanation_gen,
+        top_k_paths=30,
+    )
+
+    committed = False
+    if commit:
+        wm.commit_simulation(
+            manual_entities=manual_entities,
+            manual_relations=manual_relations,
+            news_title=analysis.article_title or event_text[:80],
+            severity=float(analysis.severity or 0.5),
+            urgency=analysis.urgency or "medium",
+            source="manual_simulation",
+        )
+        committed = True
+
+    paths      = list(result.propagation_paths or [])
+    talan_pct  = 0.0
+    talan_prob = 0.0
+    if paths:
+        top       = max(paths, key=lambda p: abs(getattr(p, "weighted_score", 0)))
+        talan_pct = float(getattr(top, "estimated_business_impact_pct", 0.0))
+        talan_prob= float(getattr(top, "impact_probability", 0.0))
+    elif result.talan_prediction:
+        raw_impact = float(result.talan_prediction.predicted_impact)
+        talan_pct  = max(-35.0, min(35.0, raw_impact * 35.0))
+        talan_prob = float(result.talan_prediction.confidence) * 0.5
+
+    # ── Dedicated explain LLM: enrich path explanations + strategic advice ──
+    from app.core.llm import get_explain_llm, invoke_with_retry
+    from app.schemas.market_analysis_schemas import PropagationExplanation
+
+    explain_llm = get_explain_llm()
+    enrichment  = _enrich_simulation_with_llm(event_text, talan_pct, paths, explain_llm.invoke)
+    strategic_advice = enrichment.get("strategic_advice", "")
+    path_enrichments = enrichment.get("paths_enrichment", [])
+
+    # Merge LLM enrichment back into each path's explanation fields
+    for i, path in enumerate(paths):
+        llm_data = path_enrichments[i] if i < len(path_enrichments) else {}
+        if llm_data and (path.explanation is not None or llm_data):
+            causal  = str(llm_data.get("causal_reasoning", ""))
+            action  = str(llm_data.get("recommended_action", ""))
+            if path.explanation is not None:
+                # Overwrite heuristic fields with LLM output
+                if causal:
+                    path.explanation.causal_reasoning = causal
+                if action:
+                    path.explanation.recommended_action = action
+            elif causal or action:
+                # No heuristic explanation — create one from LLM output only
+                paths[i] = path.model_copy(update={"explanation": PropagationExplanation(
+                    causal_reasoning=causal,
+                    affected_business_unit="Talan",
+                    affected_sector="IT Services",
+                    risk_category="tech_disruption",
+                    severity="medium",
+                    recommended_action=action,
+                    time_horizon="short",
+                )})
+
+    meta = augmented.get("simulation_meta", {})
+    out  = ManualSimulationResult(
+        simulation_id          = sim_id,
+        committed              = committed,
+        talan_impact_pct       = talan_pct,
+        talan_impact_prob      = max(0.0, min(1.0, talan_prob)),
+        systemic_risk_score    = float(result.systemic_risk_score or 0.0),
+        propagation_paths      = paths,
+        filtered_path_count    = int(result.filtered_path_count or 0),
+        rejected_path_count    = int(result.rejected_path_count or 0),
+        augmented_node_count   = int(meta.get("added_entities", 0)),
+        augmented_edge_count   = int(meta.get("added_edges", 0)),
+        extracted_entities        = [e.name for e in relevant_entities],
+        extracted_relations_count = len(relevant_relations),
+        llm_event_summary      = analysis.event_summary or "",
+        strategic_advice       = strategic_advice,
+    )
+    return out.model_dump()
+
+
+@router.post(
+    "/market/simulate",
+    summary="Simulate impact of a free-text event on Talan",
+    description=(
+        "The manager describes an event in plain text. The LLM extracts entities "
+        "and causal relations automatically (same analyst as the live pipeline), "
+        "then the GNN propagation engine predicts Talan's impact. Transient by "
+        "default — set commit=true to persist the scenario to Neo4j."
+    ),
+)
+async def simulate_event(
+    payload: QuickSimulationRequest,
+    commit: bool = Query(False, description="Persist the extracted scenario to Neo4j"),
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    import asyncio
+    try:
+        loop   = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: _run_simulation_sync(payload.event_text, payload.category, commit),
+        )
+        return result
+    except ValueError as e:
+        if "llm_failed" in str(e):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Le modèle de langage n'a pas pu analyser cet événement. "
+                    "Vérifiez les quotas LLM et réessayez."
+                ),
             )
-            committed = True
-
-        # ── Step 5: Response ──────────────────────────────────────────────────
-        paths      = list(result.propagation_paths or [])
-        talan_pct  = 0.0
-        talan_prob = 0.0
-        if paths:
-            top       = max(paths, key=lambda p: abs(getattr(p, "weighted_score", 0)))
-            talan_pct = float(getattr(top, "estimated_business_impact_pct", 0.0))
-            talan_prob= float(getattr(top, "impact_probability", 0.0))
-        elif result.talan_prediction:
-            # Cap raw TGAT prediction at ±35% to avoid misleading ±100% numbers
-            raw_impact = float(result.talan_prediction.predicted_impact)
-            talan_pct  = max(-35.0, min(35.0, raw_impact * 35.0))
-            talan_prob = float(result.talan_prediction.confidence) * 0.5  # penalise low-path confidence
-
-        meta = augmented.get("simulation_meta", {})
-        out  = ManualSimulationResult(
-            simulation_id          = sim_id,
-            committed              = committed,
-            talan_impact_pct       = talan_pct,
-            talan_impact_prob      = max(0.0, min(1.0, talan_prob)),
-            systemic_risk_score    = float(result.systemic_risk_score or 0.0),
-            propagation_paths      = paths,
-            filtered_path_count    = int(result.filtered_path_count or 0),
-            rejected_path_count    = int(result.rejected_path_count or 0),
-            augmented_node_count   = int(meta.get("added_entities", 0)),
-            augmented_edge_count   = int(meta.get("added_edges", 0)),
-            extracted_entities        = [e.name for e in relevant_entities],
-            extracted_relations_count = len(relevant_relations),
-            llm_event_summary      = analysis.event_summary or "",
-        )
-        return out.model_dump()
-
+        raise HTTPException(status_code=500, detail=str(e))
+    except ConnectionError as e:
+        if "neo4j_unavailable" in str(e):
+            raise HTTPException(status_code=503, detail="Neo4j unavailable")
+        raise HTTPException(status_code=500, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

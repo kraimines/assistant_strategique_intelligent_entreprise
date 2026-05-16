@@ -904,7 +904,11 @@ _HORIZON_LABELS = {
     "medium_term": "1-3 mois",
     "long_term":   "3-6 mois",
 }
-_SOURCE_PRIORITY_LABELS = {"Event", "News", "Competitor", "Regulation", "MacroIndicator"}
+_SOURCE_PRIORITY_LABELS = {
+    "Event", "News", "Competitor", "Regulation", "MacroIndicator",
+    # synthetic mechanism node types — included so BFS starts from them too
+    "Sector", "MarketTrend", "Country", "Person", "Technology",
+}
 
 
 def _horizon_label(horizons: List[str]) -> str:
@@ -915,27 +919,48 @@ def _horizon_label(horizons: List[str]) -> str:
 
 
 def _build_narrative(source_name: str, steps: List[Any], chain_score: float) -> str:
-    direction  = "négatif" if chain_score < 0 else "positif"
-    intensity  = "fort" if abs(chain_score) > 0.5 else "modéré" if abs(chain_score) > 0.25 else "faible"
-    chain_desc = " -> ".join(s.node_name for s in steps) + " -> Talan"
-    reasons    = "; ".join(
+    """Director-readable French summary, ~3 lines, no jargon.
+
+    Structure:
+      1. Headline: nature + force + sens du signal
+      2. Chaîne de transmission (entités intermédiaires, sans Talan)
+      3. Raisons concrètes (les `reason` non-génériques des étapes)
+    """
+    is_negative = chain_score < 0
+    abs_score   = abs(chain_score)
+    if abs_score > 0.5:
+        intensity, lead = ("fort", "🔴" if is_negative else "🟢")
+    elif abs_score > 0.25:
+        intensity, lead = ("modéré", "🟠" if is_negative else "🟢")
+    else:
+        intensity, lead = ("faible", "🟡")
+    nature = "menace" if is_negative else "opportunité"
+
+    # Build the transmission chain — drop the source and Talan for readability
+    mids = [s.node_name for s in steps[1:] if s.node_name and s.node_name.lower() != "talan"]
+    chain_desc = " → ".join(mids) if mids else "impact direct"
+
+    # Aggregate the concrete reasons (skip auto-generated fallbacks)
+    reasons = [
         s.reason for s in steps
         if s.reason and s.reason.strip() and not s.reason.startswith("Propagation via")
-    )[:500]
-    narrative  = (
-        f"**{source_name}** génère un impact {intensity} {direction} sur Talan "
-        f"via la chaîne causale : {chain_desc}."
-    )
-    if reasons:
-        narrative += f"\n\n{reasons}"
-    return narrative
+    ]
+    rationale = " ".join(reasons)[:400]
+
+    parts = [
+        f"{lead} **{source_name}** constitue une {nature} d'intensité {intensity} pour Talan.",
+        f"**Chaîne de transmission** : {chain_desc} → Talan.",
+    ]
+    if rationale:
+        parts.append(f"**Mécanisme** : {rationale}")
+    return "\n\n".join(parts)
 
 
 def _extract_propagation_paths(
     snapshot: Dict[str, Any],
     predictions: List[Any],
-    max_paths: int = 8,
-    max_hops: int = 3,
+    max_paths: int = 30,
+    max_hops: int = 4,
     entity_title_map: Optional[Dict[str, str]] = None,
 ) -> List[Any]:
     """
@@ -1024,21 +1049,111 @@ def _extract_propagation_paths(
     # News nodes processed first so they fill seen_names before entity duplicates
     candidate_ids = news_ids + entity_ids
 
-    # ── Collect all paths ────────────────────────────────────────────────────
-    def _signed_score(edge: Dict) -> float:
-        s   = float(edge.get("impact_score") or 0.0)
-        neg = str(edge.get("impact_direction", "")).lower() == "negative"
-        return -abs(s) if neg else abs(s)
+    # ── Edge semantic weights (§2 — stronger than raw impact_score) ─────────
+    from app.services.market_analysis.synthetic_enricher import EDGE_SEMANTIC_WEIGHTS
+    from app.services.market_analysis.policy.edge_type_policy import (
+        TIER1_RELATIONS, TIER2_RELATIONS,
+    )
 
-    # key = (source_name, intermediate_node_sequence) — dedup identical chains
+    def _rel_of(edge: Dict) -> str:
+        return str(edge.get("type") or edge.get("relation_type") or "")
+
+    def _edge_weight(edge: Dict) -> float:
+        """Per-edge propagation weight ∈ [0, 1].
+
+        Semantics:
+          - Tier-2 (MENTIONS, CORRELATED_WITH, …) → 0   (hard-gated)
+          - Unknown relation type                  → 0   (fail closed)
+          - Otherwise: semantic_weight × |impact| × freshness_decay × confidence
+
+        No magnitude floor: an edge with impact_score=0 means "unknown",
+        not "small", so it contributes 0 and the geometric-mean chain score
+        will reject the path. This is the correct behavior for causal
+        propagation (a missing transmission coefficient breaks the chain).
+        """
+        rel_type = _rel_of(edge)
+        if not rel_type or rel_type in TIER2_RELATIONS:
+            return 0.0
+
+        sem_w = EDGE_SEMANTIC_WEIGHTS.get(rel_type, 0.0)
+        if sem_w <= 0.0:
+            return 0.0
+
+        raw = float(edge.get("impact_score") or 0.0)
+        magnitude = abs(raw)
+        if magnitude == 0.0:
+            # only after passing tier check: give known causal edges with
+            # missing magnitude a minimal-but-nonzero weight so they can
+            # still chain (the geometric mean will dampen them anyway)
+            magnitude = 0.15
+
+        # Temporal decay from the CORRECT field (freshness_score, not
+        # relation_strength which is the α from EdgeTypePolicy).
+        hl_days   = float(edge.get("half_life_days") or 30.0)
+        freshness = float(edge.get("freshness_score") or 0.5)
+        days_old  = max(0.0, (1.0 - freshness) * hl_days)
+        t_decay   = math.exp(-math.log(2) / max(hl_days, 1.0) * days_old)
+
+        conf = float(edge.get("confidence") or 0.5)
+        w = sem_w * magnitude * t_decay * conf
+        return max(0.0, min(1.0, w))
+
+    def _chain_score(path_edges: List) -> float:
+        """Geometric-mean chain score with tier gating.
+
+        Propagation is multiplicative: a chain is only as strong as the
+        product of its transmission coefficients. One weak hop should
+        meaningfully drag the score down (financial contagion, supply
+        shock, regulatory cascade all behave this way).
+
+        Hard gates (return 0):
+          - any Tier-2 edge in the path (semantic-only contamination)
+          - path is purely Tier-1 (structural with no causal mechanism)
+          - any edge has weight 0 (unknown / blocked relation)
+
+        Sign comes from the LAST hop into Talan — that's the
+        operationally meaningful direction (final cause).
+        """
+        if not path_edges:
+            return 0.0
+
+        rels = [_rel_of(e) for _, _, e in path_edges]
+        # Gate 1: tier-2 contamination kills the path
+        if any(r in TIER2_RELATIONS for r in rels):
+            return 0.0
+        # Gate 2: pure structural path with no causal edge
+        if all(r in TIER1_RELATIONS for r in rels):
+            return 0.0
+
+        weights = [_edge_weight(e) for _, _, e in path_edges]
+        # Gate 3: any zero weight kills the chain (broken transmission)
+        if any(w <= 0.0 for w in weights):
+            return 0.0
+
+        # Geometric mean — multiplicative aggregation
+        log_sum = sum(math.log(max(w, 1e-9)) for w in weights)
+        geom    = math.exp(log_sum / len(weights))
+
+        # Sign from the final hop into Talan (most proximate cause).
+        last_edge = path_edges[-1][2]
+        last_raw  = float(last_edge.get("impact_score") or 0.0)
+        last_neg  = (str(last_edge.get("impact_direction", "")).lower() == "negative"
+                     or last_raw < 0)
+        sign = -1.0 if last_neg else 1.0
+
+        return float(max(-1.0, min(1.0, sign * geom)))
+
+    # ── Collect all paths ────────────────────────────────────────────────────
     seen_path_keys: set = set()
     scored: List[Tuple[float, float, str, str, List]] = []
 
     for src_id in candidate_ids:
         paths = bfs_to_talan(src_id)
         for path_edges in paths:
-            edge_scores = [_signed_score(e) for _, _, e in path_edges]
-            chain_score = float(np.mean(edge_scores)) if edge_scores else 0.0
+            chain_score = _chain_score(path_edges)
+            # Skip paths that fail tier gating (chain_score=0 from gate)
+            if abs(chain_score) < 1e-6:
+                continue
             chain_conf  = float(np.mean([float(e.get("confidence") or 0.5)
                                          for _, _, e in path_edges]))
             src_node = node_by_id.get(src_id, {})
@@ -1056,19 +1171,9 @@ def _extract_propagation_paths(
 
     scored.sort(key=lambda x: abs(x[0]), reverse=True)
 
-    # Final dedup: keep best path per source_name
-    seen_names: set = set()
-    deduped: List = []
-    for entry in scored:
-        name = entry[3]
-        if name in seen_names:
-            continue
-        seen_names.add(name)
-        deduped.append(entry)
-
     # ── Build PropagationPath objects ─────────────────────────────────────────
     result: List[Any] = []
-    for chain_score, chain_conf, src_id, src_name, path_edges in deduped[:max_paths]:
+    for chain_score, chain_conf, src_id, src_name, path_edges in scored[:max_paths]:
         src_node  = node_by_id.get(src_id, {})
         src_label = (src_node.get("labels") or ["Company"])[0]
         src_props = src_node.get("properties", {})
@@ -1091,7 +1196,7 @@ def _extract_propagation_paths(
                 node_type     = from_type,
                 relation_type = rel,
                 reason        = reason,
-                impact_score  = round(_signed_score(edge), 3),
+                impact_score  = round(_edge_weight(edge), 3),
                 time_horizon  = th,
             ))
 

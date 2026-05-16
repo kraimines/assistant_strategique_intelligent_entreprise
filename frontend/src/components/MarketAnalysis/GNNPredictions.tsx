@@ -315,6 +315,98 @@ function PropagationChain({ path, index }: { path: PropagationPath; index: numbe
                 </p>
               </div>
 
+              {/* ── Director's brief: headline + financial impact + owner + deadline ── */}
+              {path.explanation && (
+                <div className="rounded-xl p-3"
+                  style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+                           border: `1.5px solid ${sevColor}30` }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wide mb-2"
+                    style={{ color: sevColor }}>
+                    🎯 Note de Direction
+                  </p>
+
+                  {/* Headline */}
+                  {path.explanation.headline && (
+                    <p className="text-sm font-bold leading-snug mb-3"
+                      style={{ color: 'var(--text-primary)' }}>
+                      {path.explanation.headline}
+                    </p>
+                  )}
+
+                  {/* Grid: financial impact | owner | deadline | confidence */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {path.explanation.financial_impact_eur && (
+                      <div className="rounded-lg p-2"
+                        style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-[#92400E] mb-0.5">
+                          💰 Impact financier
+                        </p>
+                        <p className="text-[11px] font-bold leading-tight text-[#78350F]">
+                          {path.explanation.financial_impact_eur}
+                        </p>
+                      </div>
+                    )}
+                    {path.explanation.recommended_owner && (
+                      <div className="rounded-lg p-2"
+                        style={{ background: '#DBEAFE', border: '1px solid #BFDBFE' }}>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-[#1E40AF] mb-0.5">
+                          👤 Responsable
+                        </p>
+                        <p className="text-[11px] font-bold leading-tight text-[#1E3A8A]">
+                          {path.explanation.recommended_owner}
+                        </p>
+                      </div>
+                    )}
+                    {path.explanation.deadline_label && (
+                      <div className="rounded-lg p-2"
+                        style={{ background: '#FEE2E2', border: '1px solid #FECACA' }}>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-[#991B1B] mb-0.5">
+                          ⏰ Échéance
+                        </p>
+                        <p className="text-[11px] font-bold leading-tight text-[#7F1D1D]">
+                          {path.explanation.deadline_label}
+                        </p>
+                      </div>
+                    )}
+                    {path.explanation.confidence_label && (
+                      <div className="rounded-lg p-2"
+                        style={{ background: '#D1FAE5', border: '1px solid #A7F3D0' }}>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-[#065F46] mb-0.5">
+                          🎯 Fiabilité
+                        </p>
+                        <p className="text-[11px] font-bold leading-tight text-[#064E3B]">
+                          {path.explanation.confidence_label}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommended action (the concrete one) */}
+                  <div className="rounded-lg p-2.5"
+                    style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-[#15803D] mb-1">
+                      ✅ Action recommandée
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-[#14532D]">
+                      {path.explanation.recommended_action}
+                    </p>
+                    {path.explanation.affected_business_unit && (
+                      <p className="text-[9px] mt-1 text-[#16A34A]">
+                        BU concernée : <span className="font-bold">{path.explanation.affected_business_unit}</span>
+                        {path.explanation.affected_sector && ` · Secteur : ${path.explanation.affected_sector}`}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Confidence rationale (small print) */}
+                  {path.explanation.confidence_rationale && (
+                    <p className="text-[9px] mt-2 text-[var(--text-faint)] italic">
+                      {path.explanation.confidence_rationale}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Step-by-step hop timeline */}
               <div className="space-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)]">
@@ -422,15 +514,7 @@ function PropagationChainsPanel({ paths }: { paths: PropagationPath[] }) {
   const [view, setView] = useState<'graph' | 'list'>('graph');
   const isDemo = paths.length === 0;
 
-  // Client-side dedup by source_name
-  const dedupedPaths = isDemo ? DEMO_PATHS : (() => {
-    const seen = new Set<string>();
-    return paths.filter((p) => {
-      if (seen.has(p.source_name)) return false;
-      seen.add(p.source_name);
-      return true;
-    });
-  })();
+  const dedupedPaths = isDemo ? DEMO_PATHS : paths;
 
   return (
     <div className="space-y-3">
@@ -489,13 +573,6 @@ function PropagationChainsPanel({ paths }: { paths: PropagationPath[] }) {
       {/* List view */}
       {view === 'list' && (
         <div className="space-y-3">
-          {paths.length !== dedupedPaths.length && !isDemo && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px]"
-              style={{ background: 'rgba(148,163,184,0.08)', border: '1px solid var(--border-subtle)', color: 'var(--text-faint)' }}>
-              <Network size={10} />
-              {paths.length - dedupedPaths.length} chemin(s) dupliqué(s) masqué(s) — affichage de {dedupedPaths.length} chaînes uniques
-            </div>
-          )}
           {dedupedPaths.map((path, i) => (
             <PropagationChain key={`${path.source_name}-${i}`} path={path} index={i} />
           ))}
@@ -1382,11 +1459,8 @@ function ResultPanel({ result, onRunGNN, running }: { result: GNNResult; onRunGN
           <p className="text-sm font-bold text-[var(--text-secondary)] flex-1">
             {view === 'chemins'
               ? (() => {
-                  const rawLen = result.propagation_paths?.length ?? 0;
-                  const uniqueLen = rawLen > 0
-                    ? new Set(result.propagation_paths.map((p) => p.source_name)).size
-                    : DEMO_PATHS.length;
-                  return `Chemins de propagation · ${uniqueLen} chaîne${uniqueLen > 1 ? 's' : ''} uniques${rawLen > uniqueLen ? ` (${rawLen - uniqueLen} doublons masqués)` : ''}`;
+                  const n = result.propagation_paths?.length ?? DEMO_PATHS.length;
+                  return `Chemins de propagation · ${n} chemin${n > 1 ? 's' : ''}`;
                 })()
               : `Impact prédit · ${result.predictions.length} entités`}
           </p>

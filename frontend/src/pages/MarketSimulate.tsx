@@ -13,7 +13,7 @@ import {
   FlaskConical, Play, Save, X, TrendingDown, TrendingUp,
   AlertTriangle, Loader2, CheckCircle2, Info, ArrowRight,
   Sparkles, Swords, Shield, Cpu, Globe, Users, BarChart2,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Lightbulb,
 } from 'lucide-react';
 
 import AppShell from '../components/layout/AppShell';
@@ -282,6 +282,11 @@ export default function MarketSimulate() {
                 onDiscard={() => { setResult(null); setCommitted(false); }}
               />
 
+              {/* Strategic advice from dedicated explain LLM */}
+              {result.strategic_advice && (
+                <StrategicAdvicePanel advice={result.strategic_advice} />
+              )}
+
               {/* Chemins de propagation */}
               {/* Always show propagation section — use real paths if available,
                   else build a minimal fallback from extracted entities */}
@@ -299,6 +304,46 @@ export default function MarketSimulate() {
     </AppShell>
   );
 }
+
+// ── Conseil stratégique global (LLM dédié) ───────────────────────────────────
+
+function StrategicAdvicePanel({ advice }: { advice: string }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)',
+      border: '1.5px solid #BFDBFE',
+      borderRadius: 14,
+      padding: 24,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{
+          background: '#2563EB', borderRadius: 10,
+          padding: '7px 9px', display: 'flex', alignItems: 'center',
+        }}>
+          <Lightbulb size={18} color="white" />
+        </div>
+        <div>
+          <h3 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>
+            Conseil stratégique pour Talan
+          </h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '2px 0 0' }}>
+            Généré par un LLM dédié — analyse et recommandations concrètes
+          </p>
+        </div>
+      </div>
+      <p style={{
+        color: '#1E3A5F',
+        fontSize: 14,
+        lineHeight: 1.75,
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+      }}>
+        {advice}
+      </p>
+    </div>
+  );
+}
+
 
 // ── Ce que l'IA a compris ─────────────────────────────────────────────────────
 
@@ -545,7 +590,7 @@ function PropagationPaths({
       </div>
 
       {/* Force-directed graph — always visible */}
-      <PropagationGraph paths={displayPaths} height={340} />
+      <PropagationGraph paths={displayPaths} height={Math.min(600, 280 + displayPaths.length * 12)} />
 
       {/* Detailed path cards — only for real GNN paths */}
       {hasRealPaths && (

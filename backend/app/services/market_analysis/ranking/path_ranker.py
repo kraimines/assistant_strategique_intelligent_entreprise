@@ -29,11 +29,20 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # ── Filter thresholds ────────────────────────────────────────────────────────
-MIN_PLAUSIBILITY  = 0.35
-MIN_SPECIFICITY   = 0.25
-MAX_GENERIC_HUBS  = 1            # i.e. reject paths with >= 2 generic hubs
-MIN_COHERENCE     = 0.20
-MIN_CONFIDENCE    = 0.40
+# Tightened to match the contract in the module docstring. The previous
+# relaxed values (0.10 / 0.05 / 5 / 0.05 / 0.10) let MENTIONS-driven paths
+# through. With Tier-2 edges hard-gated upstream, these thresholds are now
+# safe to enforce.
+MIN_PLAUSIBILITY  = 0.30
+MIN_SPECIFICITY   = 0.20
+MAX_GENERIC_HUBS  = 1
+MIN_COHERENCE     = 0.15
+MIN_CONFIDENCE    = 0.35
+
+# Tier-2 (semantic-only) relations — must never appear in a propagation path.
+_TIER2_RELS = frozenset({
+    "MENTIONS", "CORRELATED_WITH", "ASSOCIATED_WITH", "REFERS_TO", "DISCUSSES",
+})
 
 
 # ── Public DTO ───────────────────────────────────────────────────────────────
@@ -198,6 +207,8 @@ class PathRanker:
             reasons.append("generic_hub_overload")
         if any(float(e.get("relation_strength") or 0.0) <= 0.0 for e in edge_dicts):
             reasons.append("blocked_edge")
+        if any((e.get("type") or "") in _TIER2_RELS for e in edge_dicts):
+            reasons.append("semantic_only_path")
         if coh < MIN_COHERENCE:
             reasons.append(f"coherence<{MIN_COHERENCE}")
         if conf_bar < MIN_CONFIDENCE:

@@ -31,9 +31,24 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ALPHA = 0.5
+DEFAULT_ALPHA = 0.1
 DEFAULT_HALF_LIFE_DAYS = 90.0
 EPS = 1e-3
+
+# Tier-2 (semantic-only) relations: always α=0, regardless of what the
+# Neo4j compatibility matrix says. These are informational, never causal.
+# Mentioning someone in an article does not transmit economic risk.
+TIER2_RELATIONS: frozenset = frozenset({
+    "MENTIONS", "CORRELATED_WITH", "ASSOCIATED_WITH",
+    "REFERS_TO", "DISCUSSES",
+})
+
+# Tier-1 (structural) relations: identity / membership, propagation only
+# when chained with at least one Tier-0 (causal) edge.
+TIER1_RELATIONS: frozenset = frozenset({
+    "BELONGS_TO_SECTOR", "OPERATES_IN", "SERVES_SECTOR",
+    "LOCATED_IN", "OWNS", "PART_OF",
+})
 
 
 @dataclass(frozen=True)
@@ -95,10 +110,30 @@ class EdgeTypePolicy:
     # ── Lookups ──────────────────────────────────────────────────────────────
 
     def lookup(self, rel_type: str, src_label: str, dst_label: str) -> CompatibilityRule:
+        # Tier-2 relations are always blocked — semantic, not causal.
+        if rel_type in TIER2_RELATIONS:
+            return CompatibilityRule(
+                rel_type=rel_type,
+                src_label=src_label,
+                dst_label=dst_label,
+                alpha=0.0,
+                half_life_days=DEFAULT_HALF_LIFE_DAYS,
+                category="semantic",
+            )
         rule = self._matrix.get((rel_type, src_label, dst_label))
         if rule is not None:
+            # Even matrix-loaded MENTIONS-style relations are hard-blocked.
+            if rule.rel_type in TIER2_RELATIONS and rule.alpha > 0:
+                return CompatibilityRule(
+                    rel_type=rule.rel_type,
+                    src_label=rule.src_label,
+                    dst_label=rule.dst_label,
+                    alpha=0.0,
+                    half_life_days=rule.half_life_days,
+                    category="semantic",
+                )
             return rule
-        # Fall back to a synthetic default so callers never crash on unknown pairs
+        # Unknown triple → low default (not blocked, but suppressed)
         return CompatibilityRule(
             rel_type=rel_type,
             src_label=src_label,

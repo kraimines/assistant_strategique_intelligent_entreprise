@@ -138,12 +138,14 @@ class Settings(BaseSettings):
     llm_provider: str = "groq"
 
     # ── Providers par rôle (optimisation quota / performance) ─────────────────
-    # json_llm_provider  : orchestrateur, analyst, scanner → JSON structuré
-    # tool_llm_provider  : agents HR/CRM/ERP/market/competitive → tool calling
-    # text_llm_provider  : email_agent, final_response → génération FR
-    json_llm_provider: str = "groq"
-    tool_llm_provider: str = "groq"
-    text_llm_provider: str = "gemini"
+    # json_llm_provider    : orchestrateur, analyst, scanner → JSON structuré
+    # tool_llm_provider    : agents HR/CRM/ERP/market/competitive → tool calling
+    # text_llm_provider    : email_agent, final_response → génération FR
+    # explain_llm_provider : simulation — explications + recommandations Talan
+    json_llm_provider:    str = "groq"
+    tool_llm_provider:    str = "groq"
+    text_llm_provider:    str = "gemini"
+    explain_llm_provider: str = "groq"
 
     # ── ChromaDB ─────────────────────────────────────────────────────────────
     chroma_persist_dir: str = "./chroma_db"

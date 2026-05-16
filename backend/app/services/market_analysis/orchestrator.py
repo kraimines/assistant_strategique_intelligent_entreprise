@@ -187,7 +187,8 @@ class MarketAnalysisPipeline:
                         "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
                         "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
                         "SERVES_SECTOR", "OPERATES_BU", "BU_SERVES",
-                        "BU_DEPENDS_ON", "MENTIONS",
+                        "BU_DEPENDS_ON",
+                        # MENTIONS deliberately excluded — context only, never propagation
                     ],
                 )
                 price_data = self.collector.fetch_price_snapshot()

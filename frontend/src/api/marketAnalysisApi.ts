@@ -150,13 +150,22 @@ export type TimeHorizon = 'immediate' | 'short' | 'medium' | 'long';
 export type Uncertainty = 'low' | 'medium' | 'high';
 
 export interface PropagationExplanation {
+  // Executive header
+  headline?: string;                 // one-line takeaway for cards / lists
+  // Reasoning
   causal_reasoning: string;
   affected_business_unit: string;
   affected_sector: string;
   risk_category: RiskCategory;
   severity: Severity;
+  // Action package
   recommended_action: string;
+  recommended_owner?: string;        // e.g. "Direction Commerciale BU"
+  // Time + money + reliability (director-grade)
   time_horizon: TimeHorizon;
+  deadline_label?: string;           // e.g. "avant Q2 2026"
+  financial_impact_eur?: string;     // e.g. "+€297k à +€551k de revenu additionnel"
+  confidence_label?: string;         // "Forte" | "Moyenne" | "Limitée" | "Spéculative"
   confidence_rationale?: string;
 }
 
@@ -410,4 +419,6 @@ export interface ManualSimulationResult {
   extracted_entities: string[];
   extracted_relations_count: number;
   llm_event_summary: string;
+  // Strategic advice from dedicated explain LLM
+  strategic_advice: string;
 }

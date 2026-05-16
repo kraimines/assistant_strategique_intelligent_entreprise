@@ -285,6 +285,21 @@ def get_text_llm() -> Any:
     return _get_groq_llm()
 
 
+def get_explain_llm() -> Any:
+    """LLM dédié aux explications + recommandations stratégiques (simulation manuelle).
+
+    Utilise EXPLAIN_LLM_PROVIDER (défaut: groq llama-3.3-70b) — tâche séparée
+    de l'extraction JSON pour ne pas saturer un seul modèle.
+    Génère du texte consultatif en français, une tâche par LLM.
+    """
+    provider = settings.explain_llm_provider.lower()
+    if provider == "mistral" and settings.mistral_api_key:
+        return _get_mistral_llm()
+    if provider == "gemini":
+        return _get_gemini_llm()
+    return _get_groq_llm()
+
+
 def get_llm_with_tools(tools: List[Any]) -> Any:
     """Retourne le LLM tool-calling (TOOL_LLM_PROVIDER) avec les tools bindés."""
     llm = get_tool_llm()

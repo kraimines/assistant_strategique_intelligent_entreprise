@@ -1,0 +1,272 @@
+@startuml Talan_Global_UseCase
+!theme plain
+
+skinparam {
+  backgroundColor #FAFAFA
+  ActorStyle awesome
+  PackageStyle rectangle
+
+  ActorBorderColor       #1A5276
+  ActorBackgroundColor   #D6EAF8
+  ActorFontColor         #1A5276
+  ActorFontSize          13
+  ActorFontStyle         bold
+
+  UseCaseBorderColor     #1A5276
+  UseCaseBackgroundColor #FDFEFE
+  UseCaseFontSize        11
+  UseCaseFontColor       #1B2631
+
+  PackageBorderColor     #1A5276
+  PackageBorderThickness 2
+  PackageBackgroundColor #EBF5FB
+  PackageFontSize        13
+  PackageFontStyle       bold
+  PackageFontColor       #1A5276
+
+  ArrowColor             #2C3E50
+  ArrowThickness         1.2
+  ArrowFontSize          10
+  ArrowFontColor         #5D6D7E
+
+  NoteBorderColor        #E67E22
+  NoteBackgroundColor    #FDEBD0
+  NoteFontSize           10
+}
+
+title <size:22><b>Talan Intelligent Enterprise Assistant</b></size>\n<size:14>Global Use Case Diagram</size>
+
+' ================================================================
+'  HUMAN ACTORS (left side)
+' ================================================================
+actor "Employee"  as EMP  #D6EAF8
+actor "Manager"   as MGR  #AED6F1
+actor "Admin"     as ADM  #5DADE2
+
+' ================================================================
+'  SYSTEM ACTORS (right side)
+' ================================================================
+actor "External APIs\n(News / Market Data\nYahoo Finance)" as EXT   #D5DBDB
+actor "Groq LLM\nService"                                  as LLM   #D5F5E3
+actor "SMTP\nServer"                                        as SMTP  #FAD7A0
+actor "Neo4j\nGraph DB"                                    as NEO4J #D7BDE2
+
+' Role inheritance
+EMP <|-- MGR : <<extends>>
+MGR <|-- ADM : <<extends>>
+
+' ================================================================
+'  SYSTEM BOUNDARY
+' ================================================================
+rectangle "  <b>Talan Intelligent Enterprise Assistant</b>  " as SYS {
+
+  ' ─────────────────────────────────────────────────────────────
+  '  1. AUTHENTICATION & PROFILE
+  ' ─────────────────────────────────────────────────────────────
+  package "Authentication & Profile" as AUTH {
+    usecase "Register / Login\n(JWT Token)"               as UC_LOGIN
+    usecase "View Own Profile\n& Linked HR Record"         as UC_PROFILE
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  2. AI CONVERSATIONAL ASSISTANT
+  ' ─────────────────────────────────────────────────────────────
+  package "AI Conversational Assistant" as CHAT {
+    usecase "Send Chat Message\n(Streaming SSE)"           as UC_CHAT
+    usecase "Classify Domain &\nRoute to Domain Agent"     as UC_CLASSIFY
+    usecase "Execute Domain Tools\n(SQL via ReAct Loop)"   as UC_TOOLS
+    usecase "Retrieve Documents\n(RAG / ChromaDB)"         as UC_RAG
+    usecase "Send Email via\nAssistant"                    as UC_EMAIL
+    usecase "Manage Conversation\nHistory"                 as UC_HISTORY
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  3. HUMAN RESOURCES
+  ' ─────────────────────────────────────────────────────────────
+  package "Human Resources (HR)" as HR {
+    usecase "Search & View\nEmployee Directory"            as UC_EMP_VIEW
+    usecase "Request Leave\n(Self-service)"                as UC_LEAVE_REQ
+    usecase "Approve / Reject\nLeave Request"              as UC_LEAVE_APRV
+    usecase "Manage Employees\n(Create / Update / Delete)" as UC_EMP_CRUD
+    usecase "Manage Departments\n& Skills"                 as UC_DEPT
+    usecase "View Performance\nReviews & Timesheets"       as UC_PERF
+    usecase "View HR KPIs\n(Headcount, Avg Salary)"        as UC_HR_KPI
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  4. CRM
+  ' ─────────────────────────────────────────────────────────────
+  package "CRM — Customer Relationship" as CRM {
+    usecase "Manage Accounts\n& Contacts"                  as UC_ACCOUNTS
+    usecase "Manage Opportunities\n& Pipeline Stages"      as UC_OPPS
+    usecase "Log CRM Activities\n(Calls, Meetings, Emails)" as UC_ACTS
+    usecase "View CRM KPIs\n(Pipeline, Top Accounts)"      as UC_CRM_KPI
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  5. ERP
+  ' ─────────────────────────────────────────────────────────────
+  package "ERP — Enterprise Resource Planning" as ERP {
+    usecase "View Suppliers,\nCustomers & Products"        as UC_ERP_READ
+    usecase "Manage Sales Orders\n& Track Status"          as UC_ORDERS
+    usecase "Manage Invoices\n& Record Payments"           as UC_INVOICES
+    usecase "View ERP KPIs\n(Revenue, Orders Summary)"     as UC_ERP_KPI
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  6. MARKET INTELLIGENCE
+  ' ─────────────────────────────────────────────────────────────
+  package "Market Intelligence" as MARKET {
+    usecase "View Market Alerts\n& Analysis Reports"       as UC_ALERTS
+    usecase "Explore Knowledge\nGraph (Neo4j KG)"          as UC_KG
+    usecase "View GNN Impact\nPropagation Paths"           as UC_GNN
+    usecase "View LSTM Forecast\n(7-day / 30-day)"         as UC_LSTM
+    usecase "Run What-if\nMarket Simulation"               as UC_MKT_SIM
+    usecase "Get Strategic\nRecommendations"               as UC_RECO
+    usecase "View Live Stock\nPrice Ticker"                as UC_TICKER
+    usecase "Trigger Market\nPipeline (Manual)"            as UC_PIPELINE
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  7. COMPETITIVE INTELLIGENCE
+  ' ─────────────────────────────────────────────────────────────
+  package "Competitive Intelligence" as CI {
+    usecase "Scan Competitor\nNews (RSS / Scraper)"        as UC_CI_NEWS
+    usecase "Analyze Competitor\nJob Postings"             as UC_CI_JOBS
+    usecase "View Threat Radar\n& Competitor Ranking"      as UC_CI_RADAR
+    usecase "Get Competitive\nStrategic Actions"           as UC_CI_RECO
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  8. WORLD MODEL EXPLORER
+  ' ─────────────────────────────────────────────────────────────
+  package "World Model Explorer" as WORLD {
+    usecase "Explore Organization\nGraph (Org/CRM/HR/ERP)" as UC_WORLD
+    usecase "Search Entities\n(Employees, Accounts, Projects)" as UC_SEARCH
+    usecase "View Cross-domain\nTimeline"                  as UC_TIMELINE
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  9. STRATEGIC SIMULATION
+  ' ─────────────────────────────────────────────────────────────
+  package "Strategic Simulation" as SIM {
+    usecase "Select & Configure\nSimulation Scenario"      as UC_SIM_SEL
+    usecase "View Simulation\nResults & Advice"            as UC_SIM_RES
+  }
+
+  ' ─────────────────────────────────────────────────────────────
+  '  10. ADMINISTRATION
+  ' ─────────────────────────────────────────────────────────────
+  package "Administration" as ADMIN {
+    usecase "Sync Neo4j\nKnowledge Graph"                  as UC_SYNC
+    usecase "View Full ERP Stats\n(Admin Only)"            as UC_ERP_STATS
+    usecase "Manage Users\n& Roles"                        as UC_USERS
+  }
+
+  ' ================================================================
+  '  INCLUDE / EXTEND RELATIONSHIPS
+  ' ================================================================
+
+  ' Chat pipeline
+  UC_CHAT      ..> UC_CLASSIFY : «include»
+  UC_CLASSIFY  ..> UC_TOOLS    : «include»
+  UC_CLASSIFY  ..> UC_RAG      : «extend»
+  UC_TOOLS     ..> UC_EMAIL    : «extend»
+
+  ' Market intelligence pipeline
+  UC_MKT_SIM   ..> UC_GNN      : «include»
+  UC_PIPELINE  ..> UC_GNN      : «include»
+  UC_PIPELINE  ..> UC_LSTM     : «include»
+  UC_GNN       ..> UC_RECO     : «extend»
+
+  ' Simulation chain
+  UC_SIM_SEL   ..> UC_SIM_RES  : «include»
+
+  ' KG exploration uses Neo4j snapshot
+  UC_WORLD     ..> UC_SEARCH   : «extend»
+}
+
+' ================================================================
+'  EMPLOYEE ASSOCIATIONS
+' ================================================================
+EMP --> UC_LOGIN
+EMP --> UC_PROFILE
+EMP --> UC_CHAT
+EMP --> UC_HISTORY
+EMP --> UC_EMP_VIEW
+EMP --> UC_LEAVE_REQ
+EMP --> UC_PERF
+EMP --> UC_ALERTS
+EMP --> UC_KG
+EMP --> UC_GNN
+EMP --> UC_LSTM
+EMP --> UC_MKT_SIM
+EMP --> UC_RECO
+EMP --> UC_TICKER
+EMP --> UC_CI_NEWS
+EMP --> UC_CI_JOBS
+EMP --> UC_CI_RADAR
+EMP --> UC_CI_RECO
+EMP --> UC_WORLD
+EMP --> UC_SEARCH
+EMP --> UC_TIMELINE
+
+' ================================================================
+'  MANAGER (ADDITIONAL) ASSOCIATIONS
+' ================================================================
+MGR --> UC_LEAVE_APRV
+MGR --> UC_EMP_CRUD
+MGR --> UC_DEPT
+MGR --> UC_HR_KPI
+MGR --> UC_ACCOUNTS
+MGR --> UC_OPPS
+MGR --> UC_ACTS
+MGR --> UC_CRM_KPI
+MGR --> UC_ERP_READ
+MGR --> UC_ORDERS
+MGR --> UC_SIM_SEL
+
+' ================================================================
+'  ADMIN (ADDITIONAL) ASSOCIATIONS
+' ================================================================
+ADM --> UC_INVOICES
+ADM --> UC_ERP_KPI
+ADM --> UC_ERP_STATS
+ADM --> UC_PIPELINE
+ADM --> UC_SYNC
+ADM --> UC_USERS
+
+' ================================================================
+'  SYSTEM ACTOR ASSOCIATIONS
+' ================================================================
+EXT   --> UC_PIPELINE : "feeds news\n& market data"
+LLM   --> UC_CLASSIFY
+LLM   --> UC_GNN
+LLM   --> UC_CI_NEWS
+LLM   --> UC_RECO
+LLM   --> UC_MKT_SIM
+SMTP  --> UC_EMAIL    : "delivers"
+NEO4J --> UC_WORLD
+NEO4J --> UC_KG
+NEO4J --> UC_GNN
+NEO4J --> UC_SYNC     : "persists KG"
+
+' ================================================================
+'  LEGEND NOTE
+' ================================================================
+note as LEGEND
+  <b>Actors</b>
+  Employee  – base user (self-service HR, chat, market view)
+  Manager   – Employee + HR/CRM write + simulation
+  Admin     – Manager + ERP write + pipeline + Neo4j sync
+  ──────────────────────────────────────────────
+  <b>Relationships</b>
+  «include» – sub-use case always executed
+  «extend»  – sub-use case conditionally executed
+  ──────────────────────────────────────────────
+  <b>Tech Stack</b>
+  FastAPI · LangGraph · PostgreSQL · Neo4j
+  ChromaDB · Redis · Groq LLM · React + Vite
+end note
+
+@enduml
