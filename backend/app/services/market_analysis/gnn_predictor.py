@@ -1146,12 +1146,23 @@ def _extract_propagation_paths(
         log_sum = sum(math.log(max(w, 1e-9)) for w in weights)
         geom    = math.exp(log_sum / len(weights))
 
-        # Sign from the final hop into Talan (most proximate cause).
-        last_edge = path_edges[-1][2]
-        last_raw  = float(last_edge.get("impact_score") or 0.0)
-        last_neg  = (str(last_edge.get("impact_direction", "")).lower() == "negative"
-                     or last_raw < 0)
-        sign = -1.0 if last_neg else 1.0
+        # Sign: use the last CAUSAL edge (skip structural DEPENDS_ON/DRIVES at the end).
+        # The synthetic enricher appends a DEPENDS_ON edge (exposure→Talan) with
+        # positive impact_score regardless of chain direction. Using that edge's sign
+        # would always produce positive chains even for threat paths.
+        _STRUCTURAL_SIGN_SKIP = frozenset({"DEPENDS_ON", "BELONGS_TO_SECTOR", "OPERATES_IN",
+                                            "SERVES_SECTOR", "PART_OF"})
+        # Walk backwards to find the first non-structural edge
+        sign_edge = path_edges[-1][2]
+        for _, _, e in reversed(path_edges):
+            if _rel_of(e) not in _STRUCTURAL_SIGN_SKIP:
+                sign_edge = e
+                break
+
+        sign_raw = float(sign_edge.get("impact_score") or 0.0)
+        sign_neg = (str(sign_edge.get("impact_direction", "")).lower() == "negative"
+                    or sign_raw < 0)
+        sign = -1.0 if sign_neg else 1.0
 
         return float(max(-1.0, min(1.0, sign * geom)))
 
@@ -1181,7 +1192,18 @@ def _extract_propagation_paths(
     if not scored:
         return []
 
-    scored.sort(key=lambda x: abs(x[0]), reverse=True)
+    # ── Diversity-aware selection: guarantee ≥ 1/3 negative paths ───────────
+    # Without this, high-magnitude positive AI paths fill all max_paths slots,
+    # leaving zero room for negative/threat paths.
+    positives = sorted([s for s in scored if s[0] >= 0], key=lambda x: abs(x[0]), reverse=True)
+    negatives = sorted([s for s in scored if s[0] <  0], key=lambda x: abs(x[0]), reverse=True)
+    neg_quota = min(len(negatives), max(max_paths // 3, 1))
+    pos_quota = min(len(positives), max_paths - neg_quota)
+    # Backfill: if fewer negatives than quota, give remaining slots to positives
+    pos_quota = min(len(positives), max_paths - min(neg_quota, len(negatives)))
+    selected = positives[:pos_quota] + negatives[:neg_quota]
+    selected.sort(key=lambda x: abs(x[0]), reverse=True)
+    scored = selected
 
     # ── Build PropagationPath objects ─────────────────────────────────────────
     result: List[Any] = []

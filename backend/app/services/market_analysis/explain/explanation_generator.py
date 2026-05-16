@@ -170,7 +170,7 @@ def _financial_impact_eur(
     annualised revenue × time-horizon fraction. Returns a band with
     ±30% uncertainty for executive readability.
     """
-    if abs(impact_pct) < 0.5:
+    if abs(impact_pct) < 0.10:
         return "Impact financier négligeable"
 
     bu_share = max(0.05, min(1.0, bu_revenue_share or 0.15))
@@ -243,15 +243,30 @@ class ExplanationGenerator:
         affected_bu = self._infer_bu(affected_sector, steps)
 
         chain_score = float(path.get("chain_score", 0.0))
-        is_positive = chain_score > 0 or scored_path.estimated_business_impact_pct > 0
+        # is_positive is determined solely by chain_score sign so it's consistent
+        # with what was computed in the TGAT scoring pipeline.
+        is_positive = chain_score >= 0
 
-        # Risk category from dominant edge category
+        # Risk category from dominant edge category + first step node type
         cats = [s.get("category") or "default" for s in steps]
         dominant_cat = max(set(cats), key=cats.count) if cats else "default"
         if is_positive and dominant_cat in {"event", "sector", "public", "default"}:
             risk_cat = "growth_opportunity"
         else:
             risk_cat = _CATEGORY_TO_RISK.get(dominant_cat, "tech_disruption")
+            # Refine risk_cat for fallback-injected negative paths whose steps
+            # carry only "default" category (no explicit edge classification).
+            if not is_positive and risk_cat == "tech_disruption" and dominant_cat == "default":
+                # Use first step node_type to pick a more accurate category
+                first_type = (steps[0].get("node_type") or "").lower() if steps else ""
+                if first_type in ("macro_indicator", "macroindicator", "event"):
+                    risk_cat = "macro"
+                elif first_type in ("sector", "competitor"):
+                    risk_cat = "competitive"
+                elif first_type == "regulation":
+                    risk_cat = "regulatory"
+                else:
+                    risk_cat = "macro"  # default for generic negative company paths
 
         severity = _severity_from_score(scored_path.weighted_score, scored_path.plausibility)
         horizon = _horizon_from_freshness(scored_path.path_freshness)

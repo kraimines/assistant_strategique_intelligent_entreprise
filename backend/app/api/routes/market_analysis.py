@@ -585,11 +585,50 @@ async def gnn_predict(
                         })
             kg_snapshot["entity_title_map"] = entity_title_map
 
+            # Build neg_impact_override: entity_name → aggregate impact.
+            # Uses TWO sources so the fallback injection fires even when nodes
+            # have no stored impact_score in Neo4j:
+            #   1. Node property impact_score (set by previous pipeline runs)
+            #   2. Mean of incoming CAUSES_IMPACT_ON / IMPACTS edge scores
+            #      (available whenever articles extracted causal relations)
+            _nid_to_name = {
+                str(n.get("id", n.get("name", ""))): n.get("name") or ""
+                for n in (kg_snapshot.get("nodes") or [])
+            }
+            _neg_accum: dict = {}  # name → [scores]
+            for edge in (kg_snapshot.get("edges") or []):
+                etype  = str(edge.get("type") or "")
+                if etype not in ("CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES"):
+                    continue
+                score = float(edge.get("impact_score") or 0.0)
+                if score >= -0.10:
+                    continue
+                dst_name = _nid_to_name.get(str(edge.get("to", ""))) or ""
+                if dst_name and dst_name.lower() != "talan":
+                    _neg_accum.setdefault(dst_name, []).append(score)
+            neg_impact_override: dict = {
+                name: float(sum(scores) / len(scores))
+                for name, scores in _neg_accum.items()
+                if sum(scores) / len(scores) < -0.25
+            }
+            # Also add stored node impact_scores
+            for node in (kg_snapshot.get("nodes") or []):
+                node_name = node.get("name") or ""
+                stored    = (node.get("properties") or {}).get("impact_score")
+                if node_name and stored is not None:
+                    try:
+                        s = float(stored)
+                        if s < -0.20 and node_name not in neg_impact_override:
+                            neg_impact_override[node_name] = s
+                    except (TypeError, ValueError):
+                        pass
+
             enricher    = SyntheticEnricher()
             kg_snapshot = enricher.enrich(
                 kg_snapshot,
                 extracted_entities=extracted_entities_for_enricher,
                 published_at=datetime.now(_tz.utc),
+                neg_impact_override=neg_impact_override,
             )
             logger.info(
                 "gnn_predict: SyntheticEnricher applied — snapshot now %d nodes, %d edges",

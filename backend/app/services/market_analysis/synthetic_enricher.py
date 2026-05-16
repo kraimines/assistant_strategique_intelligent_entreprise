@@ -482,7 +482,10 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
     # ── 20. Banking & Financial Services Sector ──────────────────────────────
     (
         ["bank", "banking", "fintech", "insurance", "axa", "bnp", "credit agricole",
-         "wealth management", "payment", "asset management"],
+         "wealth management", "payment", "asset management",
+         # French finance / real-estate keywords
+         "crédit", "immobilier", "banque", "hypothèque", "mortgage", "prêt",
+         "real estate", "credit", "s&p", "nasdaq", "cac 40", "dow"],
         ["company", "sector"],
         [
             # POSITIVE: banking digital transformation (2 hops)
@@ -567,7 +570,14 @@ class SyntheticEnricher:
         snapshot: Dict[str, Any],
         extracted_entities: Optional[List[Dict[str, Any]]] = None,
         published_at: Optional[datetime] = None,
+        neg_impact_override: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
+        """
+        neg_impact_override: optional {entity_name: impact_score} dict.
+        If provided, overrides the snapshot node's stored impact_score for
+        the fallback negative injection decision. Useful when TGAT predictions
+        are computed externally (e.g., from a previous pipeline run).
+        """
         import copy
         snapshot = copy.deepcopy(snapshot)
         nodes: List[Dict] = snapshot.get("nodes") or []
@@ -655,6 +665,47 @@ class SyntheticEnricher:
                     added_n += 1
 
             scenarios = _match_templates(entity)
+
+            # ── Fallback negative injection ──────────────────────────────────
+            # If no negative (-1.0) scenario was matched but the entity has a
+            # strongly negative impact (< -0.3), inject a generic 2-hop
+            # negative chain so it surfaces as a threat path.
+            # Impact source priority: neg_impact_override > stored impact_score > 0
+            has_negative = any(sign < 0 for sign, _, _ in scenarios)
+            if not has_negative:
+                ent_name = entity.get("name") or ""
+                node_impact = float(
+                    (neg_impact_override or {}).get(ent_name)
+                    or (node_map.get(entity_id) or {})
+                    .get("properties", {})
+                    .get("impact_score")
+                    or 0.0
+                )
+                if node_impact < -0.30:
+                    etype_raw = (entity.get("type") or
+                                 ((node_map.get(entity_id) or {}).get("labels") or ["company"])[0]
+                                 ).lower()
+                    # Select chain & target based on entity label
+                    if etype_raw in ("sector",):
+                        fallback = (-1.0, [
+                            ("Sector Revenue Decline",  "MacroIndicator", "REDUCES", -0.75),
+                            ("IT Consulting Pullback",  "Sector",         "IMPACTS", -0.70),
+                        ], "IT Consulting Market")
+                    elif etype_raw in ("macro_indicator", "macroindicator", "event"):
+                        fallback = (-1.0, [
+                            ("Market Stress Signal",    "MacroIndicator", "REDUCES", -0.78),
+                            ("IT Budget Contraction",   "Sector",         "DELAYS",  -0.75),
+                        ], "Enterprise Innovation Budget")
+                    else:  # company, competitor, technology, person, etc.
+                        fallback = (-1.0, [
+                            ("Corporate Sector Headwind", "MacroIndicator", "REDUCES", -0.72),
+                            ("IT Consulting Demand Drop",  "Sector",         "IMPACTS", -0.68),
+                        ], "IT Consulting Market")
+                    # Only inject if this chain's first-node name is not already used
+                    fb_key = fallback[1][0][0]
+                    if not any(fb_key == (c[0][0] if c else "") for _, c, _ in scenarios):
+                        scenarios = list(scenarios) + [fallback]
+
             for sign, chain, target_exposure in scenarios[:2]:
                 if not chain:
                     continue

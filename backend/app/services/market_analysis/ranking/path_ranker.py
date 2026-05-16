@@ -154,7 +154,11 @@ class PathRanker:
         sign = -1.0 if raw_tgat < 0 else 1.0
         impact_prob = tgat_calibrated * plaus.score
         exposure = max(plaus.rule_features.get("exposure", 0.0), 0.05)
-        impact_pct = sign * 100.0 * self.mu_bu * exposure * plaus.score
+        # Scale by chain-score magnitude so strong paths get larger € estimates.
+        # tgat_calibrated ∈ [0,1] encodes how strongly the TGAT model scored
+        # the path; multiplying here makes financial impact proportional to
+        # path severity rather than constant across all paths.
+        impact_pct = sign * 100.0 * self.mu_bu * exposure * plaus.score * max(tgat_calibrated, 0.1)
         confidence = conf_bar * math.sqrt(max(plaus.score, 1e-6))
         uncertainty = self._bucket_uncertainty(1.0 - confidence)
 
