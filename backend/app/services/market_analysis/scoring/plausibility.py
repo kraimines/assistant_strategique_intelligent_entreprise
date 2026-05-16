@@ -97,6 +97,19 @@ class PlausibilityScorer:
             for bu in self.profile.get("business_units", [])
         }
 
+        # Talan's real market footprint — IT consulting / ESN / digital services
+        # These keywords appear in news article entities and synthetic mechanism nodes.
+        self._market_keywords: frozenset = frozenset({
+            "it", "digital", "consulting", "technology", "tech", "ai", "artificial intelligence",
+            "cloud", "data", "software", "cybersecurity", "cyber", "automation", "erp",
+            "saas", "transformation", "innovation", "engineering", "genai", "llm",
+            "banking", "finance", "financial", "insurance", "public sector", "government",
+            "enterprise", "corporate", "infrastructure", "services", "outsourcing", "esn",
+            "talan", "capgemini", "sopra", "atos", "accenture", "cgi",
+        })
+        # Talan primary geographies
+        self._talan_geos.update({"france", "europe", "eu", "french", "european", "paris"})
+
     # ── Rule scorer ──────────────────────────────────────────────────────────
 
     def rule_score(self, path: Dict[str, Any]) -> Tuple[float, Dict[str, float]]:
@@ -122,6 +135,18 @@ class PlausibilityScorer:
             # Suppliers / Clients of Talan also live in adjacent sectors.
             if t in {"Supplier", "Client"}:
                 sector_overlap = max(sector_overlap, 0.6)
+            # MacroIndicator / Sector / MarketTrend nodes that contain IT/consulting
+            # keywords are directly in Talan's market — give partial credit.
+            if t in {"MacroIndicator", "Sector", "MarketTrend", "Technology"} or (
+                node_props[i].get("synthetic") and t in {"Sector", "MacroIndicator"}
+            ):
+                if any(kw in name_l for kw in self._market_keywords):
+                    sector_overlap = max(sector_overlap, 0.65)
+            # Synthetic exposure nodes end at Talan exposure names (e.g. "AI Consulting Demand")
+            if node_props[i].get("synthetic") and any(
+                kw in name_l for kw in {"consulting", "it services", "digital", "ai", "cloud", "enterprise"}
+            ):
+                sector_overlap = max(sector_overlap, 0.70)
 
         # 2. geo_overlap
         geo_overlap = 0.0
@@ -133,6 +158,9 @@ class PlausibilityScorer:
                 break
             if country and country in self._talan_geos:
                 geo_overlap = max(geo_overlap, 0.8)
+            # Macro events with no specific country still affect Talan's EU/France market
+            if t in {"MacroIndicator", "Event", "Regulation"} and geo_overlap < 0.4:
+                geo_overlap = max(geo_overlap, 0.40)  # non-zero default for macro events
 
         # 3. dependency_flag — competitor / supplier / client / BU is on the path
         dep_flag = 0.0
@@ -144,6 +172,9 @@ class PlausibilityScorer:
             if name_l in self._talan_competitors:
                 dep_flag = 1.0
                 break
+            # Paths ending at known Talan exposure nodes get half credit
+            if node_props[i].get("synthetic") and t in {"Sector", "MacroIndicator"}:
+                dep_flag = max(dep_flag, 0.5)
 
         # 4. exposure_magnitude — revenue_share of any BU/Client touched
         exposure = 0.0
@@ -154,7 +185,10 @@ class PlausibilityScorer:
             if t == "Client":
                 rs = float(node_props[i].get("revenue_share") or 0.0)
                 exposure = max(exposure, rs)
-        # Normalise: revenue_share already ∈ [0,1]
+            # Synthetic exposure nodes carry a fixed exposure weight
+            if node_props[i].get("synthetic") and "exposure_weight" in node_props[i]:
+                ew = float(node_props[i].get("exposure_weight", 0.0))
+                exposure = max(exposure, ew * 0.5)  # discount vs real BU revenue
 
         score = (
             W_SECTOR     * sector_overlap

@@ -609,6 +609,7 @@ class GNNPredictor:
         prop_paths = _extract_propagation_paths(
             snapshot, predictions,
             entity_title_map=snapshot.get("entity_title_map"),
+            max_hops=5,   # synthetic 4-node chains need 5 hops: Entity→M1→M2→M3→Exposure→Talan
         )
 
         logger.info(
@@ -697,6 +698,7 @@ class GNNPredictor:
         prop_paths = _extract_propagation_paths(
             snapshot, predictions,
             entity_title_map=snapshot.get("entity_title_map"),
+            max_hops=5,
         )
 
         logger.info("GNN heuristic: predictions=%d hidden=%d paths=%d",
@@ -1040,7 +1042,17 @@ def _extract_propagation_paths(
         labels = node.get("labels") or ["Company"]
         label  = labels[0]
         name   = node.get("name", "")
+        props  = node.get("properties") or {}
         pred   = pred_by_name.get(name)
+
+        # Exclude pure Talan exposure endpoints — they're valid path targets but
+        # not informative trigger sources (TALAN_EXPOSURE nodes have no upstream event).
+        if props.get("synthetic") and props.get("exposure_weight") is not None:
+            continue
+        # Exclude intermediate synthetic mechanism nodes — they're path steps, not sources.
+        if props.get("synthetic") and props.get("description", "").startswith("Economic mechanism:"):
+            continue
+
         if "News" in labels:
             news_ids.append(nid)
         elif label in _SOURCE_PRIORITY_LABELS or (pred and abs(pred.predicted_impact) > 0.15):

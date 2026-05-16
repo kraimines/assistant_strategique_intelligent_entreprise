@@ -130,7 +130,7 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
         ["eu ai act", "ai act", "dora", "nis2", "gdpr", "data protection",
          "regulatory compliance", "eu regulation", "european regulation",
          "compliance deadline", "compliance requirement", "regulation enforcement"],
-        ["regulation", "event", "country"],
+        ["regulation", "event"],  # keyword-match only — avoids triggering on every country
         [
             # POSITIVE: regulation → compliance consulting boom
             (+1.0, [
@@ -153,7 +153,7 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
         ["tax reform", "labor law", "payroll regulation", "employment law",
          "minimum wage", "tax code", "labor regulation", "social security",
          "payroll system", "hr compliance", "tax compliance"],
-        ["regulation", "event", "country"],
+        ["regulation", "event"],  # not "country" — would match all countries
         [
             # POSITIVE: law change → system upgrade demand
             (+1.0, [
@@ -175,7 +175,7 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
         ["us-china", "trade war", "tariff", "trade tension", "trump-xi",
          "trade stabilization", "trade truce", "china trade", "semiconductor export",
          "tech export control", "beijing summit"],
-        ["country", "event", "person", "macro_indicator"],
+        ["event", "person", "macro_indicator"],  # keyword-only match for specific trade events
         [
             # NEGATIVE: trade tensions rise
             (-1.0, [
@@ -535,7 +535,7 @@ _TEMPLATES: List[Tuple[List[str], List[str], List[Scenario]]] = [
         ["government", "public sector", "france", "french government",
          "digitalization plan", "government modernization", "public service",
          "ministry", "administration", "state agency"],
-        ["country", "event", "regulation"],
+        ["event", "regulation"],  # keyword-only to avoid triggering on all countries
         [
             # POSITIVE: government digital programs
             (+1.0, [
@@ -606,6 +606,8 @@ class SyntheticEnricher:
         nodes: List[Dict] = snapshot.get("nodes") or []
         edges: List[Dict] = snapshot.get("edges") or []
         node_map: Dict[str, Dict] = {str(n.get("id", n.get("name", ""))): n for n in nodes}
+        # Name→node lookup so we can reuse existing nodes instead of creating duplicates
+        node_name_map: Dict[str, Dict] = {n.get("name", ""): n for n in nodes if n.get("name")}
 
         # ── 1. Find Talan ────────────────────────────────────────────────────
         talan_node = next((n for n in nodes if n.get("name", "").lower() == "talan"), None)
@@ -622,7 +624,7 @@ class SyntheticEnricher:
             if nid not in node_map:
                 n = {"id": nid, "name": exp_name, "labels": [exp_type], "slug": nid,
                      "ticker": None, "properties": {"synthetic": True, "exposure_weight": weight}}
-                nodes.append(n); node_map[nid] = n
+                nodes.append(n); node_map[nid] = n; node_name_map[exp_name] = n
             if not _has_edge(edges, nid, talan_id, "DEPENDS_ON"):
                 edges.append(_make_edge(nid, talan_id, "DEPENDS_ON", weight, 0.90,
                     f"Talan revenue depends on {exp_name}", "long-term", 365.0))
@@ -640,12 +642,50 @@ class SyntheticEnricher:
                     "id":    str(sn.get("id", sn.get("name", ""))),
                 }]
 
-        for entity in processed_entities:
+        # De-duplicate processed_entities by name so we don't inject the same chain twice
+        seen_entity_names: set = set()
+        deduped_entities: List[Dict[str, Any]] = []
+        for ent in processed_entities:
+            nm = (ent.get("name") or "").lower()
+            if nm and nm not in seen_entity_names:
+                seen_entity_names.add(nm)
+                deduped_entities.append(ent)
+
+        for entity in deduped_entities:
             if entity.get("name", "").lower() == "talan":
                 continue
             entity_id = str(entity.get("id", entity.get("name", "")))
+
+            # If the entity is not in the current snapshot by ID, try to find
+            # an existing node by name (to avoid creating duplicate nodes that
+            # cause self-loops in BFS). Only create a new node if truly absent.
             if entity_id not in node_map:
-                continue
+                ename = entity.get("name", "")
+                # Try to resolve by name — prefer reusing an existing node ID
+                existing_by_name = node_name_map.get(ename)
+                if existing_by_name:
+                    # Redirect entity_id to the existing node's real ID
+                    entity_id = str(existing_by_name.get("id", existing_by_name.get("name", "")))
+                else:
+                    etype_raw = (entity.get("type") or "company").lower()
+                    label_map = {
+                        "company": "Company", "competitor": "Competitor",
+                        "technology": "Technology", "regulation": "Regulation",
+                        "person": "Person", "sector": "Sector", "country": "Country",
+                        "event": "Event", "market_trend": "MarketTrend",
+                        "markettrend": "MarketTrend", "macro_indicator": "MacroIndicator",
+                        "macroindicator": "MacroIndicator", "news": "News",
+                    }
+                    label = label_map.get(etype_raw, "Company")
+                    new_node = {
+                        "id": entity_id, "name": ename, "labels": [label],
+                        "slug": entity_id, "ticker": None,
+                        "properties": {"synthetic": False, "from_analysis": True},
+                    }
+                    nodes.append(new_node)
+                    node_map[entity_id] = new_node
+                    node_name_map[ename] = new_node
+                    added_n += 1
 
             scenarios = _match_templates(entity)
             for sign, chain, target_exposure in scenarios[:2]:

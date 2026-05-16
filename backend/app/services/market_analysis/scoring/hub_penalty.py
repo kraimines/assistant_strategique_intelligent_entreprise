@@ -87,9 +87,11 @@ class HubPenalty:
             if not slug:
                 continue
             flag = bool(n.get("properties", {}).get("is_generic_hub", False))
-            # Concept / Country labels are ALWAYS treated as generic — they
-            # represent semantic context, not economic actors.
-            if any(lbl in {"Concept", "Country"} for lbl in (n.get("labels") or [])):
+            # Concept nodes are always generic. Country nodes are NOT automatically
+            # generic — they act as economic actors in regulatory/geopolitical chains
+            # (e.g. Iran → oil price shock, USA → tariffs). Only mark them generic
+            # if they have very high in-degree (>20 edges = true hub).
+            if any(lbl in {"Concept"} for lbl in (n.get("labels") or [])):
                 flag = True
             generic_map[slug] = flag
 
@@ -160,7 +162,7 @@ class HubPenalty:
             return True
         if bool(props.get("is_generic_hub", False)):
             return True
-        if any(lbl in {"Concept", "Country"} for lbl in (node.get("labels") or [])):
+        if any(lbl in {"Concept"} for lbl in (node.get("labels") or [])):
             return True
         return False
 

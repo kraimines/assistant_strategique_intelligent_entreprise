@@ -516,6 +516,7 @@ async def gnn_predict(
 
     def _run_gnn_sync() -> Dict[str, Any]:
         from pathlib import Path as _P
+        from datetime import datetime, timezone as _tz
         from app.services.market_analysis.world_model import WorldModel
         from app.services.market_analysis.gnn_predictor import GNNPredictor
         from app.services.market_analysis.collector import MarketDataCollector
@@ -527,6 +528,7 @@ async def gnn_predict(
         from app.services.market_analysis.scoring.calibration import TGATCalibrator
         from app.services.market_analysis.ranking import PathRanker
         from app.services.market_analysis.explain.explanation_generator import ExplanationGenerator
+        from app.services.market_analysis.synthetic_enricher import SyntheticEnricher
 
         wm = WorldModel()
         if not wm.is_available():
@@ -534,20 +536,31 @@ async def gnn_predict(
 
         # Causal + structural relations only — MENTIONS is deliberately excluded
         # (semantic / informational, not a propagation edge).
+        # hops=3 to allow synthetic mechanism chains (4-hop max) to surface.
         kg_snapshot = wm.get_snapshot(
-            "Talan", hops=2,
+            "Talan", hops=3,
             rel_whitelist=[
                 "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
                 "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
                 "SERVES_SECTOR", "OPERATES_BU", "BU_SERVES",
-                "BU_DEPENDS_ON",
+                "BU_DEPENDS_ON", "AFFECTS_INDICATOR", "TRIGGERS_EVENT",
+                "SUPPLY_CHAIN_LINK", "ACQUIRED", "LAUNCHED",
+                # synthetic mechanism edges
+                "DRIVES", "ENABLES", "ACCELERATES", "GENERATES",
+                "SLOWS", "DELAYS", "RESTRICTS", "FREEZES",
+                "REDUCES", "INCREASES", "REGULATES", "DEPENDS_ON",
             ],
         )
         price_data = MarketDataCollector().fetch_price_snapshot()
 
+        # ── SyntheticEnricher: inject dramatic multi-hop mechanism chains ─────
+        # This applies the 21 event-category templates to ALL real entities in
+        # the snapshot, creating 3-4 hop chains:
+        #   EVENT → MECHANISM → SECONDARY EFFECT → EXPOSURE → Talan
         try:
-            recent_rows = MarketAnalyst().get_recent_analyses(hours=168, limit=100)
+            recent_rows = MarketAnalyst().get_recent_analyses(hours=168, limit=200)
             entity_title_map: dict = {}
+            extracted_entities_for_enricher: list = []
             for row in recent_rows:
                 row_title    = row.get("article_title") or ""
                 row_entities = row.get("entities") or []
@@ -558,9 +571,28 @@ async def gnn_predict(
                     name = ent.get("name") if isinstance(ent, dict) else None
                     if name and row_title and name not in entity_title_map:
                         entity_title_map[name] = row_title
+                    if isinstance(ent, dict) and ent.get("name"):
+                        etype = (ent.get("type") or ent.get("label") or "company").lower()
+                        extracted_entities_for_enricher.append({
+                            "name": ent["name"],
+                            "type": etype,
+                            "id": ent.get("id") or ent["name"].lower().replace(" ", "-"),
+                        })
             kg_snapshot["entity_title_map"] = entity_title_map
-        except Exception:
-            pass
+
+            enricher    = SyntheticEnricher()
+            kg_snapshot = enricher.enrich(
+                kg_snapshot,
+                extracted_entities=extracted_entities_for_enricher,
+                published_at=datetime.now(_tz.utc),
+            )
+            logger.info(
+                "gnn_predict: SyntheticEnricher applied — snapshot now %d nodes, %d edges",
+                len(kg_snapshot.get("nodes", [])),
+                len(kg_snapshot.get("edges", [])),
+            )
+        except Exception as exc:
+            logger.warning("gnn_predict: SyntheticEnricher failed: %s", exc)
 
         # v3 ranking pipeline — same wiring as /market/simulate so the
         # endpoint surfaces director-grade explanations.
@@ -586,7 +618,7 @@ async def gnn_predict(
             edge_policy=edge_policy,
             path_ranker=path_ranker,
             explanation_generator=explanation_gen,
-            top_k_paths=15,
+            top_k_paths=30,
         )
         return result.model_dump()
 

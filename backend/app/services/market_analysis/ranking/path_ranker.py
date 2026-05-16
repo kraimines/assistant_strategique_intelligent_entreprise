@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 # relaxed values (0.10 / 0.05 / 5 / 0.05 / 0.10) let MENTIONS-driven paths
 # through. With Tier-2 edges hard-gated upstream, these thresholds are now
 # safe to enforce.
-MIN_PLAUSIBILITY  = 0.30
-MIN_SPECIFICITY   = 0.20
-MAX_GENERIC_HUBS  = 1
-MIN_COHERENCE     = 0.15
-MIN_CONFIDENCE    = 0.35
+MIN_PLAUSIBILITY  = 0.20   # synthetic enricher paths have lower but still valid plausibility
+MIN_SPECIFICITY   = 0.05   # mechanism chain nodes are intermediate, naturally lower specificity
+MAX_GENERIC_HUBS  = 3      # allow generic hubs in transmission chains (e.g. Country, Event)
+MIN_COHERENCE     = 0.05   # mechanism chains are inherently simple / linear
+MIN_CONFIDENCE    = 0.25   # synthetic edges start at 0.72; real edges average 0.5-0.7
 
 # Tier-2 (semantic-only) relations — must never appear in a propagation path.
 _TIER2_RELS = frozenset({
@@ -159,14 +159,20 @@ class PathRanker:
         uncertainty = self._bucket_uncertainty(1.0 - confidence)
 
         # 9. Filter
+        generic_count = sum(1 for n in intermediates if self.hub.is_generic(n))
         rejected, reasons = self._filter(
             plaus_score=plaus.score,
             spec=spec,
-            generic_count=sum(1 for n in intermediates if self.hub.is_generic(n)),
+            generic_count=generic_count,
             edge_dicts=edge_dicts,
             coh=coh,
             conf_bar=conf_bar,
         )
+        if rejected:
+            logger.debug(
+                "PATH REJECTED [%s] plaus=%.2f spec=%.2f coh=%.2f conf=%.2f hubs=%d reasons=%s",
+                path.get("source_name", "?"), plaus.score, spec, coh, conf_bar, generic_count, reasons,
+            )
 
         return ScoredPath(
             path=path,
@@ -205,7 +211,11 @@ class PathRanker:
             reasons.append(f"specificity<{MIN_SPECIFICITY}")
         if generic_count > MAX_GENERIC_HUBS:
             reasons.append("generic_hub_overload")
-        if any(float(e.get("relation_strength") or 0.0) <= 0.0 for e in edge_dicts):
+        # Only block if relation_strength is explicitly 0.0; None means unknown → default α, not blocked
+        if any(
+            (rs := e.get("relation_strength")) is not None and float(rs) <= 0.0
+            for e in edge_dicts
+        ):
             reasons.append("blocked_edge")
         if any((e.get("type") or "") in _TIER2_RELS for e in edge_dicts):
             reasons.append("semantic_only_path")

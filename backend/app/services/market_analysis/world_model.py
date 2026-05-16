@@ -220,22 +220,18 @@ LIMIT 30
 _PAGERANK_CYPHER = """
 MATCH (n)
 WHERE NOT n:News
-WITH collect(n) AS allNodes
-UNWIND allNodes AS n
 OPTIONAL MATCH (n)<-[r1]-(u) WHERE NOT u:News
-WITH n, count(DISTINCT r1) AS in_deg, allNodes
+WITH n, count(DISTINCT r1) AS in_deg
 OPTIONAL MATCH (n)-[r2]->(v) WHERE NOT v:News
-WITH n, in_deg, count(DISTINCT r2) AS out_deg, allNodes
-// First pass: r0(v) = 1/N.  r1(v) = (1-d) + d * sum_u in_deg_u / out_deg_u
-WITH n, in_deg, out_deg, size(allNodes) AS N
-WITH n, 0.15 + 0.85 * (toFloat(in_deg) / toFloat(CASE WHEN N=0 THEN 1 ELSE N END)) AS pr1
+WITH n, in_deg, count(DISTINCT r2) AS out_deg
+WITH n, 0.15 + 0.85 * toFloat(in_deg) AS pr1
 RETURN
     n.name AS name,
     COALESCE(n.slug, toLower(replace(n.name, ' ', '-'))) AS slug,
     labels(n)[0] AS label,
     pr1 AS score
 ORDER BY score DESC
-LIMIT 200
+LIMIT 300
 """
 
 

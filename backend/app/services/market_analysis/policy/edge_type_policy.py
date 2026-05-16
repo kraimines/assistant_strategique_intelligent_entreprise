@@ -31,7 +31,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ALPHA = 0.1
+DEFAULT_ALPHA = 0.55   # restored — unknown causal edges are suppressed but not blocked
 DEFAULT_HALF_LIFE_DAYS = 90.0
 EPS = 1e-3
 
