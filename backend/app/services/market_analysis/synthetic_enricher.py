@@ -540,7 +540,11 @@ def _make_edge(src, dst, etype, impact, confidence, reason, horizon, half_life) 
 
 
 def _match_templates(entity: Dict[str, Any]) -> List[Tuple[float, List[ChainNode], str]]:
-    name  = (entity.get("name") or "").lower()
+    # Apply canonical-name aliasing so 'genai', 'gen ai', 'GenAI' all match the
+    # same template keywords.
+    from app.schemas.market_analysis_schemas import _canonical_entity_name
+    canonical = _canonical_entity_name(entity.get("name") or "")
+    name  = canonical.lower()
     etype = (entity.get("type") or (entity.get("labels") or [""])[0]).lower()
     result: List[Tuple[float, List[ChainNode], str]] = []
     seen_chain_names: set = set()

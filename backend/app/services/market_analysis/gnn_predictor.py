@@ -1034,6 +1034,10 @@ def _extract_propagation_paths(
     # then other priority types (Event, Competitor, Regulation, MacroIndicator).
     pred_by_name = {p.entity_name: p for p in predictions}
 
+    # Import blacklist from schemas — generic entities like "Europe", "Investors"
+    # never make meaningful propagation sources.
+    from app.schemas.market_analysis_schemas import _is_blacklisted_entity
+
     news_ids:   List[str] = []
     entity_ids: List[str] = []
     for nid, node in node_by_id.items():
@@ -1044,6 +1048,11 @@ def _extract_propagation_paths(
         name   = node.get("name", "")
         props  = node.get("properties") or {}
         pred   = pred_by_name.get(name)
+
+        # Drop blacklisted generic entities ("Europe", "Investors", "Technology", …)
+        # even if they're already in the KG from older ingestion runs.
+        if _is_blacklisted_entity(name):
+            continue
 
         # Exclude pure Talan exposure endpoints — they're valid path targets but
         # not informative trigger sources (TALAN_EXPOSURE nodes have no upstream event).
@@ -1145,6 +1154,12 @@ def _extract_propagation_paths(
         # Geometric mean — multiplicative aggregation
         log_sum = sum(math.log(max(w, 1e-9)) for w in weights)
         geom    = math.exp(log_sum / len(weights))
+
+        # Length penalty: each additional hop beyond 1 reduces confidence by 30%.
+        # 1 hop=1.0, 2 hops=0.70, 3 hops=0.49, 4 hops=0.343 — penalises long
+        # speculative chains so direct causal paths rank higher.
+        length_decay = 0.70 ** max(0, len(weights) - 1)
+        geom = geom * length_decay
 
         # Sign: use the last CAUSAL edge (skip structural DEPENDS_ON/DRIVES at the end).
         # The synthetic enricher appends a DEPENDS_ON edge (exposure→Talan) with

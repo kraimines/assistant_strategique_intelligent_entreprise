@@ -121,6 +121,95 @@ _ENTITY_TYPE_ALIASES: Dict[str, str] = {
 }
 
 
+# ── Entity name canonicalization & blacklist ─────────────────────────────────
+# Applied at three entry points: analyst._dedup_entities, world_model._upsert_entity,
+# and synthetic_enricher._match_templates. Keeps "GenAI", "Generative AI", "Gen AI"
+# from creating separate KG nodes.
+
+_ENTITY_NAME_ALIASES: Dict[str, str] = {
+    # AI / GenAI variants
+    "genai":                              "Generative AI",
+    "gen ai":                             "Generative AI",
+    "generative ai":                      "Generative AI",
+    "generative-ai":                      "Generative AI",
+    "gpt ai":                             "Generative AI",
+    "llm":                                "Large Language Models",
+    "llms":                               "Large Language Models",
+    "large language model":               "Large Language Models",
+    "large language models":              "Large Language Models",
+    # Company name variants
+    "open ai":                            "OpenAI",
+    "openai inc":                         "OpenAI",
+    "anthropic pbc":                      "Anthropic",
+    "anthropic inc":                      "Anthropic",
+    "meta platforms":                     "Meta",
+    "meta inc":                           "Meta",
+    "facebook":                           "Meta",
+    "alphabet":                           "Google",
+    "google llc":                         "Google",
+    # Geographic variants
+    "european union":                     "EU",
+    "eu27":                               "EU",
+    "uk":                                 "United Kingdom",
+    "britain":                            "United Kingdom",
+    "usa":                                "United States",
+    "u.s.":                               "United States",
+    "u.s.a.":                             "United States",
+    "america":                            "United States",
+    # Regulation variants
+    "eu ai act":                          "EU AI Act",
+    "eu ai regulation":                   "EU AI Act",
+    "ai act":                             "EU AI Act",
+    "digital operational resilience act": "DORA",
+    "gdpr":                               "GDPR",
+    # Banking / Finance variants
+    "crédit immobilier":                  "Crédit Immobilier",
+    "credit immobilier":                  "Crédit Immobilier",
+    "ai consulting":                      "AI Transformation Consulting",
+    "ai transformation":                  "AI Transformation Consulting",
+}
+
+
+def _canonical_entity_name(name: str) -> str:
+    """Return the canonical form for an entity name. Applies alias map + trim.
+
+    Use this BEFORE generating slugs or matching against templates so that
+    'GenAI' and 'Generative AI' collapse to the same canonical entity.
+    """
+    if not name:
+        return name
+    return _ENTITY_NAME_ALIASES.get(name.strip().lower(), name.strip())
+
+
+# Generic / non-actor entities that should never appear as propagation sources.
+# These are too vague to carry causal meaning (e.g. "Europe", "Investors").
+_ENTITY_BLACKLIST: frozenset = frozenset({
+    # Geography too vague
+    "europe", "world", "global", "international", "asia", "africa",
+    # Generic actor categories
+    "investor", "investors", "customer", "customers", "client", "clients",
+    "consumer", "consumers", "user", "users",
+    "business", "businesses", "industry", "industries",
+    "market", "markets", "economy", "economies",
+    "company", "companies", "corporation", "corporations",
+    "technology", "technologies", "innovation", "innovations",
+    # Generic people / roles
+    "people", "person", "human", "humans", "team", "teams",
+    "expert", "experts", "analyst", "analysts", "executive", "executives",
+    "researcher", "researchers", "developer", "developers",
+    # Generic media references
+    "research", "study", "studies", "report", "reports", "news",
+    "article", "articles",
+    # Placeholder names
+    "bob", "alice", "john", "jane",
+})
+
+
+def _is_blacklisted_entity(name: str) -> bool:
+    """True if the entity name is too generic to be a meaningful propagation source."""
+    return (name or "").strip().lower() in _ENTITY_BLACKLIST
+
+
 class ImpactDirection(str, Enum):
     POSITIVE  = "positive"
     NEGATIVE  = "negative"
@@ -440,6 +529,7 @@ class PropagationExplanation(BaseModel):
     financial_impact_eur:    str = ""             # e.g. "≈ €3-5M sur 6 mois"
     confidence_label:        str = ""             # plain language: "Forte" | "Moyenne" | "Spéculative"
     confidence_rationale:    str = ""
+    business_relevance:      str = ""             # "Why this matters to Talan" — concrete business reason
 
 
 class PropagationPath(BaseModel):

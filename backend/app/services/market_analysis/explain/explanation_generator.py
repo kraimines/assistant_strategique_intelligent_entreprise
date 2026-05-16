@@ -207,6 +207,7 @@ class PropagationExplanationDict:
     deadline_label:          str = ""
     financial_impact_eur:    str = ""
     confidence_label:        str = ""
+    business_relevance:      str = ""   # "Why this matters to Talan" — one-line business reason
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -282,6 +283,9 @@ class ExplanationGenerator:
         recommended_action = self._draft_recommendation(
             source, affected_bu, affected_sector, risk_cat, severity, is_positive,
         )
+        business_relevance = self._draft_business_relevance(
+            source, affected_sector, affected_bu, risk_cat, is_positive,
+        )
         recommended_owner = _RISK_TO_OWNER.get(risk_cat, "Direction Générale")
         deadline_label = _deadline_label(horizon)
         financial_impact_eur = _financial_impact_eur(
@@ -306,6 +310,7 @@ class ExplanationGenerator:
             deadline_label         = deadline_label,
             financial_impact_eur   = financial_impact_eur,
             confidence_label       = confidence_label,
+            business_relevance     = business_relevance,
         )
 
         # Optional LLM polish — fail-soft
@@ -421,6 +426,30 @@ class ExplanationGenerator:
             f"fraîcheur {scored_path.path_freshness:.0%}, "
             f"confiance des sources {scored_path.avg_edge_confidence:.0%}."
         )
+
+    @staticmethod
+    def _draft_business_relevance(
+        source: str, sector: str, bu: str, risk: str, positive: bool,
+    ) -> str:
+        """One-line 'why this matters to Talan' — concrete business reason
+        tied to Talan's exposure profile. Transforms abstract graph signals
+        into actionable strategic context."""
+        if positive or risk == "growth_opportunity":
+            return (
+                f"Talan a une exposition forte aux projets {sector} dans le secteur "
+                f"bancaire & enterprise IT — cette dynamique peut accélérer la demande "
+                f"sur l'offre de la BU {bu} dès le prochain trimestre."
+            )
+        reasons = {
+            "competitive":     f"Pression accrue sur nos taux et marges dans {sector} ; risque de churn client.",
+            "regulatory":      f"Nouveaux coûts de conformité chez nos clients {sector} réduisent leur budget IT discrétionnaire.",
+            "macro":           f"Contraction des budgets clients dans {sector} → allongement de nos cycles de vente.",
+            "supply_chain":    f"Perturbation chez nos partenaires {sector} retarde les livraisons projet et le revenu reconnu.",
+            "cyber":           f"Incident sécurité accélère la demande audit mais expose nos engagements existants chez {bu}.",
+            "talent":          f"Tension sur les compétences {sector} renchérit nos coûts de delivery et réduit les marges.",
+            "tech_disruption": f"Risque d'obsolescence de notre offre {sector} face à cette évolution — repositionnement requis.",
+        }
+        return reasons.get(risk, f"Exposition directe aux évolutions du marché {sector} ; surveillance rapprochée recommandée.")
 
     # ── LLM polish (optional) ────────────────────────────────────────────────
 

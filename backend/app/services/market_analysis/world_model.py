@@ -364,15 +364,30 @@ class WorldModel:
         )
 
     def _upsert_entity(self, entity: Entity, source_article: str = "") -> None:
+        from app.schemas.market_analysis_schemas import (
+            _canonical_entity_name, _is_blacklisted_entity,
+        )
+        # Apply canonical alias map BEFORE slug generation so "GenAI" and
+        # "Generative AI" collapse to the same Neo4j node.
+        canonical_name = _canonical_entity_name(entity.name)
+        # Drop blacklisted generic entities — they shouldn't exist in the KG at all.
+        if _is_blacklisted_entity(canonical_name):
+            return
+        # If we aliased the name, track the original as an alias
+        aliases = list(entity.aliases or [])
+        if canonical_name != entity.name and entity.name not in aliases:
+            aliases.append(entity.name)
+        entity.name = canonical_name
+
         label = entity.label or _ENTITY_TYPE_TO_LABEL.get(entity.type.value, "Company")
-        slug  = entity.id or _slugify(entity.name)
+        slug  = entity.id or _slugify(canonical_name)
         props = {k: v for k, v in (entity.properties or {}).items() if isinstance(v, (str, int, float, bool))}
         self._upsert_node_safe(
             label=label,
             slug=slug,
-            name=entity.name,
+            name=canonical_name,
             ticker=entity.ticker,
-            aliases=entity.aliases,
+            aliases=aliases,
             properties=props,
             source_article=source_article,
         )

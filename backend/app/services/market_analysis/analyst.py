@@ -472,39 +472,68 @@ class NewsAnalyst:
 # ── Entity deduplication ──────────────────────────────────────────────────────
 
 def _dedup_entities(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Deduplicate entities by slug and fill missing slugs."""
+    """Deduplicate entities by slug, applying canonical-name aliases and
+    skipping generic blacklisted names."""
+    from app.schemas.market_analysis_schemas import (
+        _canonical_entity_name, _is_blacklisted_entity,
+    )
+
     raw_entities = data.get("entities", [])
     if not isinstance(raw_entities, list):
         return data
 
+    # Track original→canonical name mapping so we can rewrite relations too
+    name_remap: Dict[str, str] = {}
     seen_slugs: Dict[str, Dict] = {}
     for ent in raw_entities:
         if not isinstance(ent, dict):
             continue
-        name = ent.get("name", "")
-        if not name:
+        original_name = ent.get("name", "")
+        if not original_name:
             continue
+        # Apply alias map → canonical name BEFORE slug generation
+        name = _canonical_entity_name(original_name)
+        if name != original_name:
+            name_remap[original_name] = name
+        # Drop blacklisted generic entities (e.g. "Europe", "Investors")
+        if _is_blacklisted_entity(name):
+            continue
+        ent["name"] = name
         slug = ent.get("id") or _slugify(name)
         ent["id"] = slug
         if slug not in seen_slugs:
             seen_slugs[slug] = ent
         else:
-            # Merge aliases
+            # Merge aliases — include the original (pre-canonical) name as alias
             existing_aliases = seen_slugs[slug].get("aliases", [])
-            new_aliases = ent.get("aliases", [])
+            new_aliases = list(ent.get("aliases", []))
+            if original_name != name and original_name not in existing_aliases:
+                new_aliases.append(original_name)
             seen_slugs[slug]["aliases"] = list(set(existing_aliases + new_aliases))
 
     data["entities"] = list(seen_slugs.values())
 
-    # Also fill from_id / to_id on relations
+    # Also fill from_id / to_id on relations — rewrite endpoint names if they were aliased
     relations_key = "relations" if "relations" in data else "causal_relations"
+    cleaned_relations = []
     for rel in data.get(relations_key, []):
         if not isinstance(rel, dict):
+            continue
+        # Rewrite endpoint names through the alias map
+        for end in ("from_entity", "to_entity"):
+            v = rel.get(end)
+            if isinstance(v, str):
+                rel[end] = _canonical_entity_name(v)
+        # Drop relations that reference blacklisted entities
+        if (_is_blacklisted_entity(rel.get("from_entity", ""))
+                or _is_blacklisted_entity(rel.get("to_entity", ""))):
             continue
         if not rel.get("from_id") and rel.get("from_entity"):
             rel["from_id"] = _slugify(rel["from_entity"])
         if not rel.get("to_id") and rel.get("to_entity"):
             rel["to_id"] = _slugify(rel["to_entity"])
+        cleaned_relations.append(rel)
+    data[relations_key] = cleaned_relations
 
     return data
 

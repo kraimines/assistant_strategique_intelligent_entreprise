@@ -381,6 +381,20 @@ function PropagationChain({ path, index }: { path: PropagationPath; index: numbe
                     )}
                   </div>
 
+                  {/* "Why this matters to Talan" — the single biggest UX upgrade.
+                      Transforms abstract graph signals into actionable business context. */}
+                  {path.explanation.business_relevance && (
+                    <div className="rounded-lg p-2.5 mb-3"
+                      style={{ background: '#F3E8FF', border: '1px solid #E9D5FF' }}>
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-[#6B21A8] mb-1">
+                        💡 Pourquoi c'est important pour Talan
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-[#581C87]">
+                        {path.explanation.business_relevance}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Recommended action (the concrete one) */}
                   <div className="rounded-lg p-2.5"
                     style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
@@ -409,9 +423,17 @@ function PropagationChain({ path, index }: { path: PropagationPath; index: numbe
 
               {/* Step-by-step hop timeline */}
               <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)]">
-                  Chaîne causale — {path.hops} saut{path.hops > 1 ? 's' : ''}
-                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)]">
+                    Chaîne causale — {path.hops} saut{path.hops > 1 ? 's' : ''}
+                  </p>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full font-bold"
+                    style={path.hops <= 2
+                      ? { background: '#FEE2E2', color: '#991B1B' }
+                      : { background: '#FEF3C7', color: '#92400E' }}>
+                    {path.hops <= 2 ? '🎯 IMPACT DIRECT' : '🔄 IMPACT INDIRECT'}
+                  </span>
+                </div>
                 {path.steps.map((step, si) => {
                   const st   = nodeStyle(step.node_type);
                   const hMap: Record<string,string> = {

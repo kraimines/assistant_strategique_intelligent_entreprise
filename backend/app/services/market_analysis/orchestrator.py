@@ -676,11 +676,16 @@ class MarketAnalysisOrchestrator:
             pass
 
         kg_stats = {}
-        if self._pipeline and self._pipeline.world_model.is_available():
-            try:
-                kg_stats = self._pipeline.world_model.get_stats()
-            except Exception:
-                pass
+        try:
+            from app.services.market_analysis.world_model import WorldModel as _WM
+            # Use pipeline's WorldModel if available, else create a fresh one.
+            # This fixes the "0 nodes" bug that appeared before the first pipeline
+            # cycle: self._pipeline was None on startup so the stats query was skipped.
+            wm = self._pipeline.world_model if self._pipeline else _WM()
+            if wm.is_available():
+                kg_stats = wm.get_stats()
+        except Exception:
+            pass
 
         last_report_id: Optional[str] = None
         try:

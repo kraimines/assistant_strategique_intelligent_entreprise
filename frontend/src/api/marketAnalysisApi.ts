@@ -167,6 +167,7 @@ export interface PropagationExplanation {
   financial_impact_eur?: string;     // e.g. "+€297k à +€551k de revenu additionnel"
   confidence_label?: string;         // "Forte" | "Moyenne" | "Limitée" | "Spéculative"
   confidence_rationale?: string;
+  business_relevance?: string;       // "Why this matters to Talan" — concrete business reason
 }
 
 export interface PropagationPath {
