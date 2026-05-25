@@ -38,12 +38,27 @@ const cfgOf = (type?: string) => NODE_CFG[type ?? ''] ?? NODE_CFG.Default;
 interface GNode { id: string; name: string; type: string; isSource?: boolean; isTalan?: boolean }
 interface GEdge { source: string; target: string; impact: number; label: string }
 
-function buildGraph(paths: PropagationPath[]): { nodes: GNode[]; edges: GEdge[] } {
-  const nodeMap = new Map<string, GNode>();
-  const edgeSet  = new Map<string, GEdge>();
+// Returned alongside the graph so the UI can do node→path lookups in O(1).
+interface GraphIndex {
+  nodes:        GNode[];
+  edges:        GEdge[];
+  nodeToPaths:  Map<string, PropagationPath[]>;  // node name → paths it belongs to
+  edgeKey:      (src: string, dst: string) => string;
+}
+
+function buildGraph(paths: PropagationPath[]): GraphIndex {
+  const nodeMap     = new Map<string, GNode>();
+  const edgeSet     = new Map<string, GEdge>();
+  const nodeToPaths = new Map<string, PropagationPath[]>();
 
   const addNode = (name: string, type: string, flags?: Partial<GNode>) => {
     if (!nodeMap.has(name)) nodeMap.set(name, { id: name, name, type, ...flags });
+  };
+
+  const recordPath = (name: string, path: PropagationPath) => {
+    const list = nodeToPaths.get(name);
+    if (list) list.push(path);
+    else nodeToPaths.set(name, [path]);
   };
 
   paths.forEach(path => {
@@ -57,6 +72,7 @@ function buildGraph(paths: PropagationPath[]): { nodes: GNode[]; edges: GEdge[] 
         isSource: i === 0,
         isTalan:  n.name === 'Talan',
       });
+      recordPath(n.name, path);
 
       if (i > 0) {
         const prev = chainNodes[i - 1];
@@ -72,9 +88,42 @@ function buildGraph(paths: PropagationPath[]): { nodes: GNode[]; edges: GEdge[] 
         }
       }
     });
+    // Always record path against the implicit Talan terminus
+    addNode('Talan', 'Company', { isTalan: true });
+    recordPath('Talan', path);
   });
 
-  return { nodes: [...nodeMap.values()], edges: [...edgeSet.values()] };
+  return {
+    nodes: [...nodeMap.values()],
+    edges: [...edgeSet.values()],
+    nodeToPaths,
+    edgeKey: (src, dst) => `${src}→${dst}`,
+  };
+}
+
+// Build the set of edge-keys and node-ids that make up a given path.
+// Used to highlight one chain through the graph on node click.
+function pathHighlight(path: PropagationPath): { nodes: Set<string>; edges: Set<string> } {
+  const nodes = new Set<string>();
+  const edges = new Set<string>();
+  const chain = [
+    path.source_name,
+    ...(path.steps ?? []).map((s) => s.node_name),
+  ];
+  for (let i = 0; i < chain.length; i++) {
+    nodes.add(chain[i]);
+    if (i > 0) edges.add(`${chain[i - 1]}→${chain[i]}`);
+  }
+  return { nodes, edges };
+}
+
+// Strongest path through a node = max |chain_score|
+function strongestPathThrough(name: string, idx: GraphIndex): PropagationPath | null {
+  const list = idx.nodeToPaths.get(name);
+  if (!list || list.length === 0) return null;
+  return list.reduce((best, p) =>
+    Math.abs(p.chain_score) > Math.abs(best.chain_score) ? p : best,
+  );
 }
 
 // ── Canvas node renderer ──────────────────────────────────────────────────────
@@ -85,12 +134,13 @@ function paintNode(node: any, ctx: CanvasRenderingContext2D, globalScale: number
   const x    = node.x as number;
   const y    = node.y as number;
   const fs   = Math.max(8, 11 / globalScale);
+  const dim  = node.__inFocus === false;
 
   // Talan: gold outer ring
   if (node.isTalan) {
     ctx.beginPath();
     ctx.arc(x, y, r + 4, 0, 2 * Math.PI);
-    ctx.fillStyle = '#FBBF24';
+    ctx.fillStyle = dim ? '#FBBF2440' : '#FBBF24';
     ctx.fill();
   }
 
@@ -99,7 +149,7 @@ function paintNode(node: any, ctx: CanvasRenderingContext2D, globalScale: number
     ctx.beginPath();
     ctx.arc(x, y, r + 3, 0, 2 * Math.PI);
     ctx.setLineDash([4, 3]);
-    ctx.strokeStyle = cfg.color;
+    ctx.strokeStyle = dim ? cfg.color + '40' : cfg.color;
     ctx.lineWidth   = 1.5;
     ctx.stroke();
     ctx.setLineDash([]);
@@ -108,9 +158,10 @@ function paintNode(node: any, ctx: CanvasRenderingContext2D, globalScale: number
   // Fill circle
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
-  ctx.fillStyle   = node.__selected ? cfg.color : cfg.color + 'DD';
-  ctx.shadowColor = cfg.color;
-  ctx.shadowBlur  = node.__selected ? 12 : 4;
+  const alpha = dim ? '40' : node.__selected ? '' : 'DD';
+  ctx.fillStyle   = cfg.color + alpha;
+  ctx.shadowColor = dim ? 'transparent' : cfg.color;
+  ctx.shadowBlur  = dim ? 0 : node.__selected ? 14 : 4;
   ctx.fill();
   ctx.shadowBlur  = 0;
 
@@ -118,15 +169,15 @@ function paintNode(node: any, ctx: CanvasRenderingContext2D, globalScale: number
   ctx.font          = `${Math.max(10, r * 0.8)}px serif`;
   ctx.textAlign     = 'center';
   ctx.textBaseline  = 'middle';
-  ctx.fillStyle     = '#FFFFFF';
+  ctx.fillStyle     = dim ? '#FFFFFF80' : '#FFFFFF';
   ctx.fillText(cfg.emoji, x, y);
 
   // Label below
   ctx.font          = `bold ${fs}px Inter, sans-serif`;
   ctx.textAlign     = 'center';
   ctx.textBaseline  = 'top';
-  ctx.fillStyle     = '#1E293B';
-  ctx.strokeStyle   = 'rgba(255,255,255,0.85)';
+  ctx.fillStyle     = dim ? '#94A3B8' : '#1E293B';
+  ctx.strokeStyle   = dim ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.85)';
   ctx.lineWidth     = 3;
   const label       = node.name.length > 20 ? node.name.slice(0, 18) + '…' : node.name;
   ctx.strokeText(label, x, y + r + 4);
@@ -146,7 +197,19 @@ export default function PropagationGraph({ paths, height = 340 }: Props) {
   const [dims, setDims] = useState({ w: 600, h: height });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { nodes, edges } = useMemo(() => buildGraph(paths), [paths]);
+  const idx = useMemo(() => buildGraph(paths), [paths]);
+  const { nodes, edges } = idx;
+
+  // When a node is clicked: find the strongest path through it,
+  // then highlight that chain (other edges/nodes get dimmed).
+  const focusPath = useMemo<PropagationPath | null>(
+    () => selected ? strongestPathThrough(selected.name, idx) : null,
+    [selected, idx],
+  );
+  const highlight = useMemo(
+    () => focusPath ? pathHighlight(focusPath) : null,
+    [focusPath],
+  );
 
   // Responsive width
   useEffect(() => {
@@ -163,21 +226,30 @@ export default function PropagationGraph({ paths, height = 340 }: Props) {
     graphRef.current?.zoomToFit(400, 40);
   }, []);
 
-  // Link color by impact
+  // Link color by impact — dimmed when a path is focused and this edge isn't in it
   const linkColor = useCallback((link: any) => {
-    const imp = (link as GEdge).impact;
-    if (imp > 0.1)  return '#16A34A';   // green — positive
-    if (imp < -0.1) return '#DC2626';   // red — negative
-    return '#94A3B8';
-  }, []);
+    const e   = link as GEdge;
+    const src = typeof e.source === 'object' ? (e.source as any).id : e.source;
+    const dst = typeof e.target === 'object' ? (e.target as any).id : e.target;
+    const inFocus = !highlight || highlight.edges.has(`${src}→${dst}`);
+    const base = e.impact > 0.1 ? '#16A34A' : e.impact < -0.1 ? '#DC2626' : '#94A3B8';
+    return inFocus ? base : base + '22';   // ~13% alpha when dimmed
+  }, [highlight]);
 
-  const linkWidth = useCallback((link: any) =>
-    Math.max(1, Math.abs((link as GEdge).impact) * 4), []);
+  const linkWidth = useCallback((link: any) => {
+    const e   = link as GEdge;
+    const src = typeof e.source === 'object' ? (e.source as any).id : e.source;
+    const dst = typeof e.target === 'object' ? (e.target as any).id : e.target;
+    const inFocus = !highlight || highlight.edges.has(`${src}→${dst}`);
+    const w = Math.max(1, Math.abs(e.impact) * 4);
+    return inFocus ? (highlight ? w + 1.5 : w) : Math.max(0.5, w * 0.5);
+  }, [highlight]);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, gs: number) => {
-    node.__selected = selected?.id === node.id;
+    node.__selected  = selected?.id === node.id;
+    node.__inFocus   = !highlight || highlight.nodes.has(node.id);
     paintNode(node, ctx, gs);
-  }, [selected]);
+  }, [selected, highlight]);
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => ({ ...n })),
@@ -256,36 +328,85 @@ export default function PropagationGraph({ paths, height = 340 }: Props) {
         </div>
       </div>
 
-      {/* Selected node tooltip */}
+      {/* Selected-node panel — node info + strongest path through it */}
       {selected && (
         <div style={{
           marginTop: 10,
           background: 'white', border: '1px solid var(--border-subtle)',
-          borderRadius: 10, padding: '12px 16px',
-          display: 'flex', alignItems: 'center', gap: 12,
+          borderRadius: 10, padding: '12px 14px',
         }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: cfgOf(selected.type).color,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18, flexShrink: 0,
-          }}>
-            {cfgOf(selected.type).emoji}
-          </div>
-          <div>
-            <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 14 }}>
-              {selected.name}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: focusPath ? 10 : 0 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: cfgOf(selected.type).color,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, flexShrink: 0,
+            }}>
+              {cfgOf(selected.type).emoji}
             </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-              {selected.type}
-              {selected.isTalan && ' — Nœud cible de la simulation'}
-              {selected.isSource && ' — Source de l\'événement'}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 14 }}>
+                {selected.name}
+              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                {selected.type}
+                {selected.isTalan && ' — Nœud cible de la simulation'}
+                {selected.isSource && ' — Source de l\'événement'}
+                {focusPath && (
+                  <span style={{ marginLeft: 8, color: '#1E40AF', fontWeight: 600 }}>
+                    · Chemin le plus fort affiché
+                  </span>
+                )}
+              </div>
             </div>
+            <button
+              onClick={() => setSelected(null)}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 18 }}
+            >×</button>
           </div>
-          <button
-            onClick={() => setSelected(null)}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 18 }}
-          >×</button>
+
+          {/* Strongest path through this node — compact chain + score */}
+          {focusPath && (
+            <div style={{
+              borderTop: '1px solid var(--border-subtle)', paddingTop: 10,
+              fontSize: 11, color: 'var(--text-muted)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                <span style={{
+                  padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontWeight: 700,
+                  background: Math.abs(focusPath.chain_score) >= 0.5 ? '#FEE2E2'
+                            : Math.abs(focusPath.chain_score) >= 0.3 ? '#FFEDD5' : '#FEF3C7',
+                  color:      Math.abs(focusPath.chain_score) >= 0.5 ? '#991B1B'
+                            : Math.abs(focusPath.chain_score) >= 0.3 ? '#9A3412' : '#92400E',
+                }}>
+                  {focusPath.chain_score >= 0 ? '+' : ''}{focusPath.chain_score.toFixed(2)}
+                </span>
+                <span>Confiance {Math.round(focusPath.chain_conf * 100)}%</span>
+                <span>· {focusPath.hops} saut(s)</span>
+                <span>· {focusPath.time_horizon_label}</span>
+                {(idx.nodeToPaths.get(selected.name)?.length ?? 0) > 1 && (
+                  <span style={{ marginLeft: 'auto', color: '#1E40AF' }}>
+                    {idx.nodeToPaths.get(selected.name)!.length} chemins traversent ce nœud
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                {[focusPath.source_name, ...focusPath.steps.map((s) => s.node_name), 'Talan'].map((n, i, arr) => (
+                  <span key={`${n}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{
+                      padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                      background: n === selected.name ? '#DBEAFE' : '#F1F5F9',
+                      color:      n === selected.name ? '#1E40AF' : '#475569',
+                      border:     n === selected.name ? '1px solid #93C5FD' : '1px solid transparent',
+                    }}>
+                      {n.length > 22 ? n.slice(0, 20) + '…' : n}
+                    </span>
+                    {i < arr.length - 1 && <span style={{ color: '#94A3B8' }}>→</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -908,8 +908,13 @@ _HORIZON_LABELS = {
 }
 _SOURCE_PRIORITY_LABELS = {
     "Event", "News", "Competitor", "Regulation", "MacroIndicator",
-    # synthetic mechanism node types — included so BFS starts from them too
-    "Sector", "MarketTrend", "Country", "Person", "Technology",
+}
+# Types that are valid intermediate BFS steps but NOT valid sources.
+# Technology (GPU, iOS, ChatGPT…), Person (Reid Hoffman…), Sector, Country, MarketTrend
+# get added to the KG as entities mentioned in articles — they are nodes that
+# appear in causal chains but they are NOT the events that drive the chain.
+_SOURCE_NEVER_LABELS = {
+    "Technology", "Person", "Sector", "MarketTrend", "Country",
 }
 
 
@@ -1064,7 +1069,15 @@ def _extract_propagation_paths(
 
         if "News" in labels:
             news_ids.append(nid)
-        elif label in _SOURCE_PRIORITY_LABELS or (pred and abs(pred.predicted_impact) > 0.15):
+        elif label in _SOURCE_NEVER_LABELS:
+            # Technology/Person/Sector/Country/MarketTrend are path intermediates, never sources.
+            continue
+        elif label in _SOURCE_PRIORITY_LABELS:
+            # Real market events: Event, Competitor, Regulation, MacroIndicator.
+            entity_ids.append(nid)
+        elif pred and abs(pred.predicted_impact) > 0.30:
+            # Company nodes only if GNN predicts a strong direct impact on Talan
+            # (threshold raised from 0.15 to avoid pulling in generic brand mentions).
             entity_ids.append(nid)
 
     # News nodes processed first so they fill seen_names before entity duplicates
@@ -1138,6 +1151,14 @@ def _extract_propagation_paths(
         if not path_edges:
             return 0.0
 
+        # Gate 0: require multi-hop causal propagation (Event → Mech → Sector → … → Talan).
+        # Direct or 2-hop shortcuts (Event → Talan, Event → Sector → Talan) are rejected:
+        # propagation must traverse at least one intermediate economic mechanism to be
+        # considered a real causal chain. The SyntheticEnricher guarantees a 4-hop chain
+        # for matched entities (Entity → Mech1 → Mech2 → Exposure → Talan).
+        if len(path_edges) < 3:
+            return 0.0
+
         rels = [_rel_of(e) for _, _, e in path_edges]
         # Gate 1: tier-2 contamination kills the path
         if any(r in TIER2_RELATIONS for r in rels):
@@ -1154,12 +1175,6 @@ def _extract_propagation_paths(
         # Geometric mean — multiplicative aggregation
         log_sum = sum(math.log(max(w, 1e-9)) for w in weights)
         geom    = math.exp(log_sum / len(weights))
-
-        # Length penalty: each additional hop beyond 1 reduces confidence by 30%.
-        # 1 hop=1.0, 2 hops=0.70, 3 hops=0.49, 4 hops=0.343 — penalises long
-        # speculative chains so direct causal paths rank higher.
-        length_decay = 0.70 ** max(0, len(weights) - 1)
-        geom = geom * length_decay
 
         # Sign: use the last CAUSAL edge (skip structural DEPENDS_ON/DRIVES at the end).
         # The synthetic enricher appends a DEPENDS_ON edge (exposure→Talan) with
@@ -1207,14 +1222,34 @@ def _extract_propagation_paths(
     if not scored:
         return []
 
+    # ── Cap paths per identical intermediate chain (FIRST) ───────────────────
+    # Many distinct entities (GPU, ChatGPT, iOS, …) match the same template and
+    # therefore share the same Mech1 → Mech2 → Exposure intermediate. Without a
+    # cap, 17+ paths would have the identical visible chain (only the source
+    # entity differs), making the UI look repetitive. We diversify BEFORE the
+    # pos/neg quota so that minority chains are not eliminated by the top-N
+    # sort on |score| (which would otherwise pack the result with one dominant
+    # chain because all its sources happen to score high).
+    MAX_PER_CHAIN = 1  # 1 source per intermediate chain — eliminates duplicate GPU/ChatGPT/iOS paths
+    chain_counter: Dict[Tuple, int] = {}
+    # Sort once by |score| so the strongest path per chain is kept first
+    scored.sort(key=lambda x: abs(x[0]), reverse=True)
+    diversified: List[Tuple[float, float, str, str, List]] = []
+    for s in scored:
+        _, _, _, _, path_edges = s
+        intermediate_sig = tuple(to_id for _, to_id, _ in path_edges[:-1])
+        count = chain_counter.get(intermediate_sig, 0)
+        if count < MAX_PER_CHAIN:
+            diversified.append(s)
+            chain_counter[intermediate_sig] = count + 1
+    scored = diversified
+
     # ── Diversity-aware selection: guarantee ≥ 1/3 negative paths ───────────
-    # Without this, high-magnitude positive AI paths fill all max_paths slots,
-    # leaving zero room for negative/threat paths.
+    # Applied after chain-diversification so minority chains can still surface.
     positives = sorted([s for s in scored if s[0] >= 0], key=lambda x: abs(x[0]), reverse=True)
     negatives = sorted([s for s in scored if s[0] <  0], key=lambda x: abs(x[0]), reverse=True)
     neg_quota = min(len(negatives), max(max_paths // 3, 1))
     pos_quota = min(len(positives), max_paths - neg_quota)
-    # Backfill: if fewer negatives than quota, give remaining slots to positives
     pos_quota = min(len(positives), max_paths - min(neg_quota, len(negatives)))
     selected = positives[:pos_quota] + negatives[:neg_quota]
     selected.sort(key=lambda x: abs(x[0]), reverse=True)

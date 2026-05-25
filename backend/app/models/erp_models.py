@@ -1,4 +1,4 @@
-"""ERP SQLAlchemy ORM models — base de données talan_erp."""
+e en market analysis"""ERP SQLAlchemy ORM models — base de données talan_erp."""
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional

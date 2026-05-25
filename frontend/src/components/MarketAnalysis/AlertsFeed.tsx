@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import type { MarketAlert } from '../../api/marketAnalysisApi';
+import FeedbackButtons from './FeedbackButtons';
 
 interface Props { alerts: MarketAlert[]; loading: boolean }
 
@@ -163,6 +164,22 @@ function AlertCard({ alert }: { alert: MarketAlert }) {
                   </div>
                 </div>
               )}
+
+              <div className="rounded-xl p-2.5"
+                style={{ background: 'rgba(14,165,233,0.06)',
+                         border: '1px dashed rgba(14,165,233,0.30)' }}>
+                <FeedbackButtons
+                  itemKind     = "alert"
+                  itemId       = {`alert:${alert.alert_id ?? alert.id ?? alert.title.slice(0, 80)}`}
+                  itemCategory = {alert.level}
+                  context      = {{
+                    level:               alert.level,
+                    talan_impact_score:  alert.talan_impact_score,
+                    affected_entities:   alert.affected_entities,
+                    title:               alert.title,
+                  }}
+                />
+              </div>
             </div>
           </motion.div>
         )}

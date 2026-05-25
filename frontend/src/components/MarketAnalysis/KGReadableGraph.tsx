@@ -38,6 +38,32 @@ const NODE_CFG: Record<string, { color: string; emoji: string; label: string; r:
 
 const ALL_TYPES = Object.keys(NODE_CFG).filter(k => k !== 'Default' && k !== 'News');
 
+// ── Disposition en couches (Sankey-like) ──────────────────────────────────────
+// 0 = Sources (causes)  ·  1 = Médiateurs (propagation)  ·  2 = Cibles (impacts)
+const LAYER: Record<string, 0 | 1 | 2> = {
+  // Sources : événements, régulations, indicateurs déclencheurs
+  Event:          0,
+  Regulation:     0,
+  MarketTrend:    0,
+  MacroIndicator: 0,
+  Person:         0,
+  News:           0,
+  // Médiateurs : entités qui propagent l'impact
+  Sector:         1,
+  Technology:     1,
+  Country:        1,
+  // Cibles : entités finales qui subissent l'impact
+  Company:        2,
+  Competitor:     2,
+};
+const layerOf = (label: string) => LAYER[label] ?? 1;
+
+const LAYER_META = [
+  { idx: 0, title: 'Sources',     subtitle: 'Causes',       icon: '⚡', color: '#B45309' },
+  { idx: 1, title: 'Médiateurs',  subtitle: 'Propagation',  icon: '🔗', color: '#0F766E' },
+  { idx: 2, title: 'Cibles',      subtitle: 'Impacts',      icon: '🎯', color: '#0284C7' },
+] as const;
+
 // Couleurs des types de relations
 const REL_COLOR: Record<string, string> = {
   CAUSES_IMPACT_ON:   '#DC2626',
@@ -309,50 +335,75 @@ export default function KGReadableGraph({
 
   const graphData = useMemo(() => ({ nodes, links }), [nodes, links]);
 
-  // ── D3 forces (identique WorldModel mais encore plus aéré) ─────────────────
+  // ── D3 forces : layout en colonnes par couche (Sankey-like) ────────────────
+  // On capture la ref une fois, puis on (ré)applique les forces dans un effet
+  // qui réagit aux dimensions du canvas — sinon les colonnes ne s'ajusteraient
+  // pas au resize.
   const handleRef = useCallback((fg: any) => {
     if (!fg) return;
     fgRef.current = fg;
+  }, []);
+
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
     const sim = fg.d3Force;
     if (!sim) return;
 
-    // Fonction radius pour les forces
+    const W = dimensions.width;
+    const H = dimensions.height;
+    // Centre X de chaque colonne (15% / 50% / 85% de la largeur)
+    const colX: [number, number, number] = [W * 0.15, W * 0.50, W * 0.85];
+
     const getR = (n: any) => {
       const cfg = NODE_CFG[n.label] ?? NODE_CFG.Default;
       const degree = degreeMap[n.id] ?? 0;
       return cfg.r + Math.min(Math.floor(degree / 3), 6);
     };
 
-    // Répulsion très forte pour bien espacer
-    sim('charge')
-      ?.strength((n: any) => -(getR(n) ** 2) * 12)
-      .distanceMax(500);
+    // Force horizontale FORTE : chaque nœud est attiré vers sa colonne
+    sim('x',
+      d3.forceX().x((n: any) => colX[layerOf(n.label)]).strength(0.85),
+    );
+    // Force verticale douce : étale les nœuds dans la hauteur
+    sim('y',
+      d3.forceY(H / 2).strength(0.06),
+    );
 
-    // Liens longs pour que les labels de relation soient lisibles
+    // Plus de force centrale (remplacée par forceX/forceY)
+    sim('center')?.strength(0);
+
+    // Répulsion forte — sépare les nœuds proches dans la même colonne
+    sim('charge')
+      ?.strength((n: any) => -(getR(n) ** 2) * 14)
+      .distanceMax(600);
+
+    // Liens : distance courte verticalement, longue horizontalement (entre colonnes)
     sim('link')
       ?.distance((l: any) => {
         const s: any = l.source;
         const t: any = l.target;
+        const sameLayer = layerOf(s.label) === layerOf(t.label);
         const maxR = Math.max(getR(s), getR(t));
-        return maxR * 6 + 60;
+        return sameLayer ? maxR * 4 + 50 : maxR * 6 + 80;
       })
-      .strength(0.35);
+      // Strength faible pour que les liens ne ramènent pas les colonnes ensemble
+      .strength(0.12);
 
-    // Centrage doux
-    sim('center')?.strength(0.04);
-
-    // Collision — empêche tout chevauchement
+    // Collision — gros padding pour ne pas tasser les nœuds
     sim('collision',
       d3.forceCollide()
-        .radius((n: any) => getR(n) + 55)   // 55 px de marge = espace pour les labels
-        .strength(0.92),
+        .radius((n: any) => getR(n) + 60)
+        .strength(0.95),
     );
-  }, [degreeMap]);
 
-  // ── Fit initial ────────────────────────────────────────────────────────────
+    fg.d3ReheatSimulation?.();
+  }, [dimensions, degreeMap]);
+
+  // ── Fit initial — padding généreux pour que la vue soit aérée ──────────────
   useEffect(() => {
     if (!nodes.length) return;
-    const t = setTimeout(() => fgRef.current?.zoomToFit(700, 80), 1200);
+    const t = setTimeout(() => fgRef.current?.zoomToFit(900, 160), 1400);
     return () => clearTimeout(t);
   }, [nodes.length]);
 
@@ -524,6 +575,45 @@ export default function KGReadableGraph({
         <div ref={containerRef} className="flex-1 rounded-2xl overflow-hidden relative"
           style={{ height: 640, background: '#F8FAFC', border: '1px solid rgba(148,163,184,0.2)' }}>
 
+          {/* ── En-têtes de colonnes (Sankey) ──────────────────────────────── */}
+          {nodes.length > 0 && (
+            <>
+              <div className="absolute top-0 left-0 right-0 z-10 pointer-events-none px-4 pt-3">
+                <div className="relative h-9">
+                  {LAYER_META.map((l) => (
+                    <div
+                      key={l.idx}
+                      className="absolute -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+                      style={{
+                        left:       `${[15, 50, 85][l.idx]}%`,
+                        background: 'rgba(255,255,255,0.95)',
+                        border:     `1px solid ${l.color}40`,
+                        boxShadow:  '0 1px 6px rgba(0,0,0,0.04)',
+                      }}
+                    >
+                      <span className="text-sm">{l.icon}</span>
+                      <span
+                        className="text-[11px] font-bold uppercase tracking-wide"
+                        style={{ color: l.color }}
+                      >
+                        {l.title}
+                      </span>
+                      <span className="text-[10px] font-medium" style={{ color: l.color + 'AA' }}>
+                        · {l.subtitle}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Séparateurs verticaux discrets entre colonnes (à 32.5% et 67.5%) */}
+              <div className="absolute top-0 bottom-0 z-0 pointer-events-none"
+                style={{ left: '32.5%', width: 1, background: 'linear-gradient(180deg, transparent 0%, rgba(148,163,184,0.12) 20%, rgba(148,163,184,0.12) 80%, transparent 100%)' }} />
+              <div className="absolute top-0 bottom-0 z-0 pointer-events-none"
+                style={{ left: '67.5%', width: 1, background: 'linear-gradient(180deg, transparent 0%, rgba(148,163,184,0.12) 20%, rgba(148,163,184,0.12) 80%, transparent 100%)' }} />
+            </>
+          )}
+
           {nodes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3">
               <GitBranch size={36} className="text-slate-300" />
@@ -580,7 +670,13 @@ export default function KGReadableGraph({
           {/* Hint */}
           <div className="absolute bottom-3 left-3 z-10 px-3 py-1.5 rounded-xl text-[10px] text-slate-400"
             style={{ background: 'rgba(255,255,255,0.88)', border: '1px solid rgba(148,163,184,0.2)' }}>
-            Clic nœud = voisins · Scroll = zoom · Drag = déplacer · Double-clic = recentrer
+            Lecture : <span className="font-semibold text-slate-600">gauche → droite</span>
+            <span className="mx-1.5">·</span>
+            Clic nœud = voisins
+            <span className="mx-1.5">·</span>
+            Scroll = zoom
+            <span className="mx-1.5">·</span>
+            Drag = déplacer
           </div>
         </div>
 
@@ -659,25 +755,42 @@ export default function KGReadableGraph({
             )}
           </AnimatePresence>
 
-          {/* Légende nœuds */}
+          {/* Légende nœuds — groupée par couche (Sankey) */}
           <div className="rounded-2xl p-3 flex-shrink-0"
             style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(148,163,184,0.2)' }}>
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
               Types de nœuds
             </p>
-            <div className="space-y-1.5">
-              {ALL_TYPES.map(t => {
-                const cfg = NODE_CFG[t];
-                const active = typeFilter === t;
+            <div className="space-y-2.5">
+              {LAYER_META.map((layerMeta) => {
+                const typesInLayer = ALL_TYPES.filter(t => layerOf(t) === layerMeta.idx);
+                if (typesInLayer.length === 0) return null;
                 return (
-                  <button key={t} onClick={() => setTypeFilter(active ? null : t)}
-                    className="flex items-center gap-2 w-full hover:opacity-80 transition-opacity">
-                    <span className="text-sm">{cfg.emoji}</span>
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cfg.color }} />
-                    <span className="text-[11px] font-medium" style={{ color: active ? cfg.color : '#64748B' }}>
-                      {cfg.label}
-                    </span>
-                  </button>
+                  <div key={layerMeta.idx}>
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[10px]">{layerMeta.icon}</span>
+                      <p className="text-[9px] font-bold uppercase tracking-wider"
+                        style={{ color: layerMeta.color }}>
+                        {layerMeta.title}
+                      </p>
+                    </div>
+                    <div className="space-y-1 pl-2">
+                      {typesInLayer.map(t => {
+                        const cfg = NODE_CFG[t];
+                        const active = typeFilter === t;
+                        return (
+                          <button key={t} onClick={() => setTypeFilter(active ? null : t)}
+                            className="flex items-center gap-2 w-full hover:opacity-80 transition-opacity">
+                            <span className="text-sm">{cfg.emoji}</span>
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: cfg.color }} />
+                            <span className="text-[11px] font-medium" style={{ color: active ? cfg.color : '#64748B' }}>
+                              {cfg.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>

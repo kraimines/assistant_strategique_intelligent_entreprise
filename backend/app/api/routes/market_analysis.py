@@ -18,11 +18,17 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 
 from app.api.deps import get_current_user
 from app.core.database import get_session
 from app.schemas.market_analysis_schemas import (
+    BriefExportRequest,
+    FeedbackItemKind,
+    FeedbackRating,
+    ManagerFeedback,
+    ManagerFeedbackCreate,
     ManualSimulationRequest,
     ManualSimulationResult,
     QuickSimulationRequest,
@@ -30,6 +36,8 @@ from app.schemas.market_analysis_schemas import (
     MarketAnalysisRequest,
     MarketAnalysisResponse,
     PipelineStatus,
+    TrustScoreBucket,
+    TrustScoresResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -801,12 +809,20 @@ def _run_simulation_sync(
     if not wm.is_available():
         raise ConnectionError("neo4j_unavailable")
 
-    # rel_whitelist=None → toutes les relations Neo4j sont incluses (pas de filtre)
-    # hops=4 → exploration plus profonde du graphe de connaissance
+    # Aligned with /market/gnn/predict (which runs in ~7s) to keep the path search
+    # tractable. hops=4 + no rel_whitelist produced ~4400 edges and made predict_v3
+    # explode (> 120s) — synthetic mechanism nodes added later still give us 4-hop
+    # reach to Talan via Entity → M1 → M2 → Exposure → Talan.
     base_snapshot = wm.get_snapshot(
         "Talan",
-        hops=4,
-        rel_whitelist=None,
+        hops=2,
+        rel_whitelist=[
+            "CAUSES_IMPACT_ON", "IMPACTS", "INFLUENCES",
+            "COMPETES_WITH", "BELONGS_TO_SECTOR", "OPERATES_IN",
+            "SERVES_SECTOR", "AFFECTS_INDICATOR", "TRIGGERS_EVENT",
+            "SUPPLY_CHAIN_LINK", "ACQUIRED",
+            "DRIVES", "ENABLES", "REDUCES", "RESTRICTS", "GENERATES", "DEPENDS_ON",
+        ],
     )
 
     event_text_lower = event_text.lower()
@@ -897,7 +913,7 @@ def _run_simulation_sync(
     result = gnn.predict_v3(
         augmented, price_data=None,
         trigger_event=f"sim:{event_text[:60]}",
-        edge_policy=None,        # pas de gate — toutes les relations sont visibles
+        edge_policy=edge_policy,
         path_ranker=path_ranker,
         explanation_generator=explanation_gen,
         top_k_paths=30,
@@ -976,6 +992,18 @@ def _run_simulation_sync(
         extracted_relations_count = len(relevant_relations),
         llm_event_summary      = analysis.event_summary or "",
         strategic_advice       = strategic_advice,
+        event_graph            = {
+            "nodes": manual_entities,
+            "edges": [
+                {
+                    "from_entity":   r.from_entity,
+                    "to_entity":     r.to_entity,
+                    "relation_type": r.relation_type.value if r.relation_type else "CAUSES_IMPACT_ON",
+                    "impact_score":  float(r.impact_score or 0.0),
+                }
+                for r in relevant_relations
+            ],
+        },
     )
     return out.model_dump()
 
@@ -998,11 +1026,22 @@ async def simulate_event(
     import asyncio
     try:
         loop   = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: _run_simulation_sync(payload.event_text, payload.category, commit),
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: _run_simulation_sync(payload.event_text, payload.category, commit),
+            ),
+            timeout=105.0,
         )
         return result
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "La simulation a dépassé le délai (>105 s). "
+                "Le LLM est probablement sous pression — réessayez dans quelques secondes."
+            ),
+        )
     except ValueError as e:
         if "llm_failed" in str(e):
             raise HTTPException(
@@ -1219,3 +1258,304 @@ async def list_recommendations(
         return get_recent_recommendations(limit=limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Manager Feedback ──────────────────────────────────────────────────────────
+
+
+def _feedback_engine():
+    """Lazy sync engine for the feedback table (lives in the talan_hr DB)."""
+    from sqlalchemy import create_engine
+    from app.core.config import settings
+    return create_engine(settings.database_url("hr"), pool_pre_ping=True)
+
+
+@router.post(
+    "/market/feedback",
+    response_model=ManagerFeedback,
+    summary="Submit manager feedback on a path / recommendation / alert",
+    description=(
+        "Records a 👍 pertinente / 👎 hors-sujet / 🤔 à nuancer rating with an "
+        "optional comment. Used to recalibrate the PlausibilityScorer and to "
+        "display per-category Trust Scores in the UI."
+    ),
+)
+async def submit_feedback(
+    payload: ManagerFeedbackCreate,
+    current_user: Any = Depends(get_current_user),
+) -> ManagerFeedback:
+    import asyncio
+    from uuid import uuid4
+    from datetime import datetime
+    from sqlalchemy.orm import Session
+
+    def _insert() -> ManagerFeedback:
+        from app.models.market_analysis_models import MarketManagerFeedback
+        new_id = str(uuid4())
+        now    = datetime.utcnow()
+        user_id   = getattr(current_user, "email", None) or str(getattr(current_user, "id", "unknown"))
+        user_role = str(getattr(current_user, "role", "manager"))
+        row = MarketManagerFeedback(
+            id            = new_id,
+            submitted_at  = now,
+            user_id       = user_id,
+            user_role     = user_role,
+            item_kind     = payload.item_kind.value,
+            item_id       = payload.item_id,
+            item_category = (payload.item_category or "")[:64],
+            rating        = payload.rating.value,
+            comment       = (payload.comment or "")[:2000],
+            context_json  = payload.context or {},
+        )
+        engine = _feedback_engine()
+        with Session(engine) as s:
+            s.add(row)
+            s.commit()
+        return ManagerFeedback(
+            id            = new_id,
+            submitted_at  = now,
+            user_id       = user_id,
+            user_role     = user_role,
+            item_kind     = payload.item_kind,
+            item_id       = payload.item_id,
+            item_category = payload.item_category or "",
+            rating        = payload.rating,
+            comment       = payload.comment or "",
+            context       = payload.context or {},
+        )
+
+    try:
+        return await asyncio.get_event_loop().run_in_executor(None, _insert)
+    except Exception as e:
+        logger.exception("submit_feedback error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/market/feedback",
+    response_model=List[ManagerFeedback],
+    summary="List manager feedback entries",
+    description="Filter by item_kind / item_id / rating / window. Newest first.",
+)
+async def list_feedback(
+    item_kind: Optional[FeedbackItemKind] = Query(None),
+    item_id:   Optional[str] = Query(None),
+    rating:    Optional[FeedbackRating] = Query(None),
+    days:      int = Query(90, ge=1, le=365),
+    limit:     int = Query(100, ge=1, le=500),
+    current_user: Any = Depends(get_current_user),
+) -> List[ManagerFeedback]:
+    import asyncio
+    from datetime import datetime, timedelta
+
+    def _query() -> List[ManagerFeedback]:
+        clauses: List[str] = ["submitted_at >= :cutoff"]
+        params: Dict[str, Any] = {
+            "cutoff": datetime.utcnow() - timedelta(days=days),
+            "lim":    limit,
+        }
+        if item_kind:
+            clauses.append("item_kind = :item_kind")
+            params["item_kind"] = item_kind.value
+        if item_id:
+            clauses.append("item_id = :item_id")
+            params["item_id"] = item_id
+        if rating:
+            clauses.append("rating = :rating")
+            params["rating"] = rating.value
+
+        where  = " AND ".join(clauses)
+        sql    = (
+            "SELECT id, submitted_at, user_id, user_role, item_kind, item_id, "
+            "       item_category, rating, comment, context_json "
+            f"FROM market_manager_feedback WHERE {where} "
+            "ORDER BY submitted_at DESC LIMIT :lim"
+        )
+        engine = _feedback_engine()
+        with engine.connect() as conn:
+            rows = conn.execute(text(sql), params).mappings().all()
+
+        return [
+            ManagerFeedback(
+                id            = str(r["id"]),
+                submitted_at  = r["submitted_at"],
+                user_id       = r["user_id"],
+                user_role     = r["user_role"] or "manager",
+                item_kind     = FeedbackItemKind(r["item_kind"]),
+                item_id       = r["item_id"],
+                item_category = r["item_category"] or "",
+                rating        = FeedbackRating(r["rating"]),
+                comment       = r["comment"] or "",
+                context       = r["context_json"] or {},
+            )
+            for r in rows
+        ]
+
+    try:
+        return await asyncio.get_event_loop().run_in_executor(None, _query)
+    except Exception as e:
+        logger.exception("list_feedback error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _bucket_label(trust: float, total: int) -> str:
+    if total < 3:
+        return "insufficient"
+    if trust >= 0.70:
+        return "high"
+    if trust >= 0.45:
+        return "medium"
+    return "low"
+
+
+@router.get(
+    "/market/feedback/trust-scores",
+    response_model=TrustScoresResponse,
+    summary="Aggregated Trust Scores per (item_kind, category)",
+    description=(
+        "Returns the manager-derived Trust Score for each (item_kind, category) "
+        "bucket: relevant counts as 1.0, nuanced as 0.5, off_topic as 0. The UI "
+        "uses these to display 'Trust: 78% high' badges next to each path/reco."
+    ),
+)
+async def get_trust_scores(
+    days: int = Query(90, ge=1, le=365),
+    current_user: Any = Depends(get_current_user),
+) -> TrustScoresResponse:
+    import asyncio
+    from datetime import datetime, timedelta
+
+    def _aggregate() -> TrustScoresResponse:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        sql = (
+            "SELECT item_kind, COALESCE(item_category, '') AS item_category, "
+            "       rating, COUNT(*) AS n "
+            "FROM market_manager_feedback "
+            "WHERE submitted_at >= :cutoff "
+            "GROUP BY item_kind, item_category, rating"
+        )
+        engine = _feedback_engine()
+        with engine.connect() as conn:
+            rows = conn.execute(text(sql), {"cutoff": cutoff}).mappings().all()
+
+        buckets: Dict[tuple, Dict[str, int]] = {}
+        total_all = 0
+        for r in rows:
+            key = (r["item_kind"], r["item_category"] or "")
+            d = buckets.setdefault(key, {"relevant": 0, "off_topic": 0, "nuanced": 0})
+            d[r["rating"]] = int(r["n"])
+            total_all += int(r["n"])
+
+        out: List[TrustScoreBucket] = []
+        for (kind, category), counts in buckets.items():
+            total = counts["relevant"] + counts["off_topic"] + counts["nuanced"]
+            trust = (counts["relevant"] + 0.5 * counts["nuanced"]) / total if total else 0.0
+            out.append(TrustScoreBucket(
+                item_kind     = FeedbackItemKind(kind),
+                item_category = category,
+                total         = total,
+                relevant      = counts["relevant"],
+                off_topic     = counts["off_topic"],
+                nuanced       = counts["nuanced"],
+                trust_score   = round(trust, 3),
+                label         = _bucket_label(trust, total),
+            ))
+        out.sort(key=lambda b: (b.item_kind.value, b.item_category))
+
+        # Overall bucket — same formula across all kinds
+        all_rel = sum(c["relevant"]  for c in buckets.values())
+        all_off = sum(c["off_topic"] for c in buckets.values())
+        all_nua = sum(c["nuanced"]   for c in buckets.values())
+        overall_trust = (all_rel + 0.5 * all_nua) / total_all if total_all else 0.0
+        overall = TrustScoreBucket(
+            item_kind     = FeedbackItemKind.PATH,   # placeholder; UI displays "Global"
+            item_category = "_global",
+            total         = total_all,
+            relevant      = all_rel,
+            off_topic     = all_off,
+            nuanced       = all_nua,
+            trust_score   = round(overall_trust, 3),
+            label         = _bucket_label(overall_trust, total_all),
+        )
+
+        return TrustScoresResponse(
+            window_days   = days,
+            total_feedback= total_all,
+            buckets       = out,
+            overall       = overall,
+        )
+
+    try:
+        return await asyncio.get_event_loop().run_in_executor(None, _aggregate)
+    except Exception as e:
+        logger.exception("get_trust_scores error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Comex Brief PDF Export ────────────────────────────────────────────────────
+
+
+@router.post(
+    "/market/brief/export",
+    summary="Export executive Comex brief as PDF",
+    description=(
+        "Aggregates the period's top alerts, propagation paths, recommendations "
+        "and forecast into a 1-2 page PDF ready to share with the COMEX. The "
+        "manager can hand this to their N+1 without copy-pasting into PowerPoint."
+    ),
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+async def export_brief(
+    payload: BriefExportRequest,
+    current_user: Any = Depends(get_current_user),
+):
+    import asyncio
+    from datetime import datetime
+
+    def _build() -> bytes:
+        from app.services.market_analysis.comex_brief import build_brief_pdf
+        return build_brief_pdf(
+            period_days            = payload.period_days,
+            include_paths          = payload.include_paths,
+            include_alerts         = payload.include_alerts,
+            include_recommendations= payload.include_recommendations,
+            include_forecast       = payload.include_forecast,
+            max_paths              = payload.max_paths,
+            max_alerts             = payload.max_alerts,
+        )
+
+    try:
+        pdf_bytes = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, _build),
+            timeout=105.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "La génération du brief a dépassé le délai (>105 s). "
+                "Le LLM est sous pression — réessayez dans quelques secondes."
+            ),
+        )
+    except ImportError as e:
+        logger.exception("brief export — reportlab missing: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Le module reportlab n'est pas installé sur le serveur (pip install reportlab).",
+        )
+    except Exception as e:
+        logger.exception("export_brief error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    fname = f"talan-brief-comex-{datetime.utcnow().strftime('%Y%m%d-%H%M')}.pdf"
+    return StreamingResponse(
+        io_iter_bytes(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+def io_iter_bytes(data: bytes, chunk: int = 64 * 1024):
+    """Tiny generator so StreamingResponse can stream the in-memory PDF."""
+    for i in range(0, len(data), chunk):
+        yield data[i : i + chunk]

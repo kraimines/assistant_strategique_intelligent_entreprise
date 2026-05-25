@@ -25,7 +25,7 @@ import {
   GitBranch, Brain, BarChart2, Globe2, RefreshCw,
   MessageSquare, AlertTriangle, Activity, Lightbulb,
   FlaskConical, ArrowRight, ChevronRight, Zap,
-  CheckCircle2, Circle,
+  CheckCircle2, Circle, FileDown, Loader2,
 } from 'lucide-react';
 
 import AppShell from '../components/layout/AppShell';
@@ -411,7 +411,51 @@ export default function MarketAnalysis() {
   const [recResult, setRecResult] = useState<RecommendationResult | null>(null);
   const [kgView, setKgView] = useState<'2d' | '3d' | 'full'>('2d');
   const [veilleSubTab, setVeilleSubTab] = useState<'news' | 'analyses'>('news');
+  const [exportingBrief, setExportingBrief] = useState(false);
+  const [exportError,    setExportError]    = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const handleExportBrief = useCallback(async () => {
+    if (exportingBrief) return;
+    setExportingBrief(true);
+    setExportError(null);
+    try {
+      const resp = await marketAnalysisApi.exportBrief({
+        period_days: 7,
+        max_paths:   5,
+        max_alerts:  5,
+      });
+      // axios returns the Blob in resp.data
+      const blob = resp.data instanceof Blob ? resp.data : new Blob([resp.data], { type: 'application/pdf' });
+      const url  = URL.createObjectURL(blob);
+      const ts   = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `talan-brief-comex-${ts}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (err: any) {
+      let msg = "Échec de l'export";
+      // When responseType:'blob', axios wraps error body as a Blob — read it back
+      const blobData = err?.response?.data;
+      if (blobData instanceof Blob) {
+        try {
+          const text = await blobData.text();
+          const json = JSON.parse(text);
+          msg = json?.detail ?? msg;
+        } catch {
+          msg = err?.message ?? msg;
+        }
+      } else {
+        msg = err?.response?.data?.detail ?? err?.message ?? msg;
+      }
+      setExportError(msg);
+    } finally {
+      setExportingBrief(false);
+    }
+  }, [exportingBrief]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -625,8 +669,33 @@ export default function MarketAnalysis() {
                 <RefreshCw size={12} />
                 Rafraîchir
               </button>
+              <button
+                onClick={handleExportBrief}
+                disabled={exportingBrief}
+                title="Générer un brief PDF prêt à partager avec le COMEX"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold transition-all disabled:opacity-60"
+                style={{
+                  background: '#0B1F4A',
+                  color: 'white',
+                  border: '1px solid #0B1F4A',
+                }}
+              >
+                {exportingBrief
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <FileDown size={12} />}
+                {exportingBrief ? 'Génération…' : 'Brief Comex (PDF)'}
+              </button>
             </div>
           </div>
+          {exportError && (
+            <div
+              className="px-3 py-1.5 rounded-md text-xs font-medium"
+              style={{ background: '#FEE2E2', color: '#B91C1C',
+                       border: '1px solid #FECACA', alignSelf: 'flex-end' }}
+            >
+              ⚠ Export brief : {exportError}
+            </div>
+          )}
 
           {/* ── Pipeline status bar ───────────────────────────────────────────── */}
           <PipelineStatusBar

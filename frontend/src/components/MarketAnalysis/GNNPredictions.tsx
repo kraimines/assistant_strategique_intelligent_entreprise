@@ -21,6 +21,22 @@ import {
 } from 'lucide-react';
 import type { GNNResult, GNNPrediction, PropagationPath } from '../../api/marketAnalysisApi';
 import PropagationGraph from '../Simulation/PropagationGraph';
+import PropagationCategoriesView from './PropagationCategoriesView';
+import PropagationTimelineView from './PropagationTimelineView';
+import FeedbackButtons from './FeedbackButtons';
+import TrustScoreBadge from './TrustScoreBadge';
+
+// ── Stable feedback id from the path content ──────────────────────────────────
+function buildPathFeedbackId(p: PropagationPath): string {
+  const stepNames = (p.steps ?? []).map((s) => s.node_name).join('|');
+  const base      = `${p.source_name}::${stepNames}::${p.hops}`;
+  // djb2-style short hash so the id stays under 256 chars and is stable
+  let h = 5381;
+  for (let i = 0; i < base.length; i += 1) {
+    h = ((h << 5) + h + base.charCodeAt(i)) | 0;
+  }
+  return `path:${Math.abs(h).toString(36)}`;
+}
 
 // ── TGAT benchmark metrics (tgat_metrics.json) ────────────────────────────────
 const TGAT_METRICS = { auc: 0.9227, ap: 0.9600, f1: 0.9532, precision: 0.9111, recall: 0.9992 };
@@ -523,6 +539,28 @@ function PropagationChain({ path, index }: { path: PropagationPath; index: numbe
                   </div>
                 </div>
               </div>
+
+              {/* ── Manager feedback ────────────────────────────────────── */}
+              <div className="rounded-xl p-3 mt-3"
+                style={{ background: 'rgba(14,165,233,0.06)',
+                         border: '1px dashed rgba(14,165,233,0.30)' }}>
+                <FeedbackButtons
+                  itemKind     = "path"
+                  itemId       = {buildPathFeedbackId(path)}
+                  itemCategory = {path.explanation?.risk_category ?? path.source_type}
+                  context      = {{
+                    source_name:                   path.source_name,
+                    source_type:                   path.source_type,
+                    hops:                          path.hops,
+                    weighted_score:                path.weighted_score,
+                    business_plausibility:         path.business_plausibility,
+                    confidence:                    path.confidence,
+                    estimated_business_impact_pct: path.estimated_business_impact_pct,
+                    risk_category:                 path.explanation?.risk_category,
+                    severity:                      path.explanation?.severity,
+                  }}
+                />
+              </div>
             </div>
           </motion.div>
         )}
@@ -532,19 +570,69 @@ function PropagationChain({ path, index }: { path: PropagationPath; index: numbe
 }
 
 // ── PropagationChainsPanel — list of all paths ────────────────────────────────
-function PropagationChainsPanel({ paths }: { paths: PropagationPath[] }) {
-  const [view, setView] = useState<'graph' | 'list'>('graph');
+type PropagationView = 'categories' | 'timeline' | 'graph' | 'list';
+
+function PropagationChainsPanel({
+  paths, runAt,
+}: { paths: PropagationPath[]; runAt?: string }) {
+  const [view, setView]               = useState<PropagationView>('categories');
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const isDemo = paths.length === 0;
 
-  const dedupedPaths = isDemo ? DEMO_PATHS : paths;
+  const allPaths = isDemo ? DEMO_PATHS : paths;
+
+  // Unique event sources for the filter bar
+  const sources = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { name: string; type: string }[] = [];
+    allPaths.forEach(p => {
+      if (!seen.has(p.source_name)) {
+        seen.add(p.source_name);
+        result.push({ name: p.source_name, type: p.source_type });
+      }
+    });
+    return result;
+  }, [allPaths]);
+
+  // Paths filtered to the selected source (or all if none selected)
+  const activePaths = useMemo(
+    () => selectedSource
+      ? allPaths.filter(p => p.source_name === selectedSource)
+      : allPaths,
+    [allPaths, selectedSource],
+  );
+
+  // When a path is selected from categories/timeline → focus its source and switch to list
+  const [focusedPath, setFocusedPath] = useState<PropagationPath | null>(null);
+  const handleSelectPath = (p: PropagationPath) => {
+    setSelectedSource(p.source_name);
+    setFocusedPath(p);
+    setView('list');
+  };
+
+  const clearFilter = () => {
+    setSelectedSource(null);
+    setFocusedPath(null);
+  };
+
+  const VIEWS: { key: PropagationView; label: string }[] = [
+    { key: 'categories', label: '📋 Catégories' },
+    { key: 'timeline',   label: '⏱ Timeline'   },
+    { key: 'graph',      label: '🕸 Graphe'     },
+    { key: 'list',       label: '≡ Liste'      },
+  ];
 
   return (
     <div className="space-y-3">
       {/* Header with view toggle */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
           <Network size={13} />
-          <span>{dedupedPaths.length} chemin(s) de propagation</span>
+          <span>
+            {selectedSource
+              ? `1 événement sélectionné · ${activePaths.length} chemin(s)`
+              : `${allPaths.length} chemin(s) de propagation`}
+          </span>
           {isDemo && (
             <span className="px-2 py-0.5 rounded-full font-semibold"
               style={{ background: '#FEF9C3', color: '#92400E', border: '1px solid #FDE68A' }}>
@@ -552,26 +640,71 @@ function PropagationChainsPanel({ paths }: { paths: PropagationPath[] }) {
             </span>
           )}
         </div>
-        {/* Graph / List toggle */}
         <div className="flex items-center rounded-lg overflow-hidden"
           style={{ border: '1px solid var(--border-subtle)' }}>
-          {(['graph', 'list'] as const).map((v) => (
+          {VIEWS.map((v) => (
             <button
-              key={v}
-              onClick={() => setView(v)}
+              key={v.key}
+              onClick={() => setView(v.key)}
               style={{
-                padding: '4px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                 border: 'none',
-                background: view === v ? '#2563EB' : 'white',
-                color:      view === v ? 'white'   : 'var(--text-muted)',
+                background: view === v.key ? '#2563EB' : 'white',
+                color:      view === v.key ? 'white'   : 'var(--text-muted)',
                 transition: 'all .15s',
               }}
             >
-              {v === 'graph' ? '🕸 Graphe' : '≡ Liste'}
+              {v.label}
             </button>
           ))}
         </div>
       </div>
+
+      {/* ── Filtre par événement source ───────────────────────────────────── */}
+      {sources.length > 1 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            Filtrer par événement :
+          </span>
+          {/* Pill "Tous" */}
+          <button
+            onClick={clearFilter}
+            style={{
+              padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+              cursor: 'pointer', border: '1px solid',
+              borderColor:  !selectedSource ? '#2563EB' : 'var(--border-subtle)',
+              background:   !selectedSource ? '#EFF6FF' : 'white',
+              color:        !selectedSource ? '#1D4ED8' : 'var(--text-muted)',
+              transition: 'all .15s',
+            }}
+          >
+            Tous ({allPaths.length})
+          </button>
+          {sources.map(src => {
+            const active = selectedSource === src.name;
+            return (
+              <button
+                key={src.name}
+                onClick={() => setSelectedSource(active ? null : src.name)}
+                title={src.name}
+                style={{
+                  maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', border: '1px solid',
+                  borderColor: active ? '#2563EB' : 'var(--border-subtle)',
+                  background:  active ? '#EFF6FF' : 'white',
+                  color:       active ? '#1D4ED8' : 'var(--text-secondary)',
+                  transition: 'all .15s',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                <NodeTypeIcon type={src.type} size={10} />
+                {src.name.length > 28 ? src.name.slice(0, 26) + '…' : src.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isDemo && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
@@ -584,20 +717,42 @@ function PropagationChainsPanel({ paths }: { paths: PropagationPath[] }) {
         </div>
       )}
 
-      {/* Graph view */}
+      {/* Categories view — exhaustive, classified */}
+      {view === 'categories' && (
+        <PropagationCategoriesView paths={activePaths} onSelectPath={handleSelectPath} />
+      )}
+
+      {/* Timeline view — published_at anchor + horizon projection */}
+      {view === 'timeline' && (
+        <PropagationTimelineView paths={activePaths} runAt={runAt} onSelect={handleSelectPath} />
+      )}
+
+      {/* Graph view — only paths of the selected event */}
       {view === 'graph' && (
         <div className="rounded-2xl overflow-hidden"
           style={{ border: '1px solid var(--border-subtle)' }}>
-          <PropagationGraph paths={dedupedPaths} height={380} />
+          {activePaths.length === 0 ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              Aucun chemin pour cet événement.
+            </div>
+          ) : (
+            <PropagationGraph paths={activePaths} height={380} />
+          )}
         </div>
       )}
 
       {/* List view */}
       {view === 'list' && (
         <div className="space-y-3">
-          {dedupedPaths.map((path, i) => (
-            <PropagationChain key={`${path.source_name}-${i}`} path={path} index={i} />
-          ))}
+          {activePaths.map((path, i) => {
+            const isFocused = focusedPath?.source_name === path.source_name;
+            return (
+              <div key={`${path.source_name}-${i}`}
+                style={isFocused ? { boxShadow: '0 0 0 2px #2563EB', borderRadius: 16 } : undefined}>
+                <PropagationChain path={path} index={i} />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1431,6 +1586,9 @@ function ResultPanel({ result, onRunGNN, running }: { result: GNNResult; onRunGN
             })()}
           </div>
 
+          {/* Manager Trust Score on TGAT paths */}
+          <TrustScoreBadge itemKind="path" verbose hideIfInsufficient={false} />
+
           {/* Collapsible AUC/F1 metrics */}
           <button onClick={() => setShowMetrics((v) => !v)}
             className="flex items-center gap-1 text-[10px] text-[var(--primary-dark)] font-semibold self-start">
@@ -1513,7 +1671,10 @@ function ResultPanel({ result, onRunGNN, running }: { result: GNNResult; onRunGN
 
             {/* Propagation chains */}
             {view === 'chemins' && (
-              <PropagationChainsPanel paths={result.propagation_paths ?? []} />
+              <PropagationChainsPanel
+                paths={result.propagation_paths ?? []}
+                runAt={result.run_at}
+              />
             )}
 
             {/* Bar chart */}

@@ -10,6 +10,17 @@ import {
   ChevronDown, ChevronUp,
 } from 'lucide-react';
 import type { RecommendationResult, ForecastResult } from '../../api/marketAnalysisApi';
+import FeedbackButtons from './FeedbackButtons';
+
+// Stable feedback id from the recommendation content
+function buildRecFeedbackId(rec: RecommendationResult['recommendations'][number]): string {
+  const base = `${rec.domain}|${rec.urgency}|${rec.horizon}|${rec.title}`;
+  let h = 5381;
+  for (let i = 0; i < base.length; i += 1) {
+    h = ((h << 5) + h + base.charCodeAt(i)) | 0;
+  }
+  return `rec:${Math.abs(h).toString(36)}`;
+}
 
 const URGENCY_CONFIG = {
   critical: { label: 'Critique',  bg: '#FEF2F2', text: '#DC2626', border: '#FECACA', dot: '#DC2626' },
@@ -131,8 +142,24 @@ function RecommendationCard({ rec, index }: { rec: RecommendationResult['recomme
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="px-4 pb-4 pt-2" style={{ background: 'var(--bg-surface)' }}>
+            <div className="px-4 pb-4 pt-2 space-y-3" style={{ background: 'var(--bg-surface)' }}>
               <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{rec.action}</p>
+
+              <div className="rounded-xl p-2.5"
+                style={{ background: 'rgba(14,165,233,0.06)',
+                         border: '1px dashed rgba(14,165,233,0.30)' }}>
+                <FeedbackButtons
+                  itemKind     = "recommendation"
+                  itemId       = {buildRecFeedbackId(rec)}
+                  itemCategory = {rec.domain}
+                  context      = {{
+                    title:    rec.title,
+                    urgency:  rec.urgency,
+                    horizon:  rec.horizon,
+                    domain:   rec.domain,
+                  }}
+                />
+              </div>
             </div>
           </motion.div>
         )}

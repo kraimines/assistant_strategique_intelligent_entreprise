@@ -195,3 +195,36 @@ class MarketRecommendation(Base):
     __table_args__ = (
         Index("ix_market_recommendations_generated_at", "generated_at"),
     )
+
+
+class MarketManagerFeedback(Base):
+    """Manager feedback on a path / alert / recommendation.
+
+    Powers the human-in-the-loop quality loop: a manager rates each item
+    as relevant / off-topic / nuanced, the PlausibilityScorer is
+    recalibrated monthly from these signals, and aggregated trust scores
+    are displayed back in the UI.
+    """
+    __tablename__ = "market_manager_feedback"
+
+    id            = Column(UUID(as_uuid=False), primary_key=True, default=_gen_uuid)
+    submitted_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user_id       = Column(String(128), nullable=False)          # email or login
+    user_role     = Column(String(32),  default="manager")
+    # What is being rated
+    item_kind     = Column(String(32),  nullable=False)          # path|recommendation|alert|simulation
+    item_id       = Column(String(256), nullable=False)          # stable id (path signature, alert id, etc.)
+    item_category = Column(String(64),  default="")              # risk_category / domain / event_type
+    # Rating
+    rating        = Column(String(16),  nullable=False)          # relevant|off_topic|nuanced
+    comment       = Column(Text,        default="")
+    # Context snapshot (for later recalibration without re-running pipeline)
+    context_json  = Column(JSON,        default=dict)            # { weighted_score, plausibility, source_name, ... }
+
+    __table_args__ = (
+        Index("ix_market_feedback_submitted_at", "submitted_at"),
+        Index("ix_market_feedback_item_kind",    "item_kind"),
+        Index("ix_market_feedback_item_id",      "item_id"),
+        Index("ix_market_feedback_rating",       "rating"),
+        Index("ix_market_feedback_item_category","item_category"),
+    )

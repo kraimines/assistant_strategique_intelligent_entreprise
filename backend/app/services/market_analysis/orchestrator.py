@@ -54,7 +54,7 @@ def _ensure_tables() -> None:
     from app.models.market_analysis_models import (  # noqa: F401 — register models
         MarketRawArticle, MarketNewsAnalysis,
         MarketAlert as _MA, MarketReport as _MR, MarketPipelineRun,
-        MarketGNNScore, MarketRecommendation,  # noqa: F401 — register tables with Base.metadata
+        MarketGNNScore, MarketRecommendation, MarketManagerFeedback,  # noqa: F401 — register tables with Base.metadata
     )
     engine = _get_engine()
     Base.metadata.create_all(
@@ -65,6 +65,7 @@ def _ensure_tables() -> None:
             _MA.__table__,
             _MR.__table__,
             MarketPipelineRun.__table__,
+            MarketManagerFeedback.__table__,
         ],
         checkfirst=True,
     )

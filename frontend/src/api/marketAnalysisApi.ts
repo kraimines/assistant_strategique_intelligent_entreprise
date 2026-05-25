@@ -365,7 +365,86 @@ export const marketAnalysisApi = {
       params: { commit },
       timeout: 120_000,   // 2 min — LLM extraction + GNN inference
     }),
+
+  // ── Manager feedback ────────────────────────────────────────────────
+  submitFeedback: (payload: ManagerFeedbackCreate) =>
+    api.post<ManagerFeedback>('/market/feedback', payload),
+
+  listFeedback: (params: {
+    item_kind?: FeedbackItemKind;
+    item_id?: string;
+    rating?: FeedbackRating;
+    days?: number;
+    limit?: number;
+  } = {}) =>
+    api.get<ManagerFeedback[]>('/market/feedback', { params }),
+
+  getTrustScores: (days = 90) =>
+    api.get<TrustScoresResponse>('/market/feedback/trust-scores', { params: { days } }),
+
+  // ── Comex brief PDF export ──────────────────────────────────────────
+  exportBrief: (payload: BriefExportRequest = {}) =>
+    api.post<Blob>('/market/brief/export', payload, {
+      responseType: 'blob',
+      timeout: 120_000,
+    }),
 };
+
+// ── Feedback & Brief types ─────────────────────────────────────────────────────
+
+export type FeedbackRating  = 'relevant' | 'off_topic' | 'nuanced';
+export type FeedbackItemKind = 'path' | 'recommendation' | 'alert' | 'simulation';
+
+export interface ManagerFeedbackCreate {
+  item_kind: FeedbackItemKind;
+  item_id: string;
+  item_category?: string;
+  rating: FeedbackRating;
+  comment?: string;
+  context?: Record<string, unknown>;
+}
+
+export interface ManagerFeedback {
+  id: string;
+  submitted_at: string;
+  user_id: string;
+  user_role: string;
+  item_kind: FeedbackItemKind;
+  item_id: string;
+  item_category: string;
+  rating: FeedbackRating;
+  comment: string;
+  context: Record<string, unknown>;
+}
+
+export interface TrustScoreBucket {
+  item_kind: FeedbackItemKind;
+  item_category: string;
+  total: number;
+  relevant: number;
+  off_topic: number;
+  nuanced: number;
+  trust_score: number;       // 0..1
+  label: 'high' | 'medium' | 'low' | 'insufficient';
+}
+
+export interface TrustScoresResponse {
+  generated_at: string;
+  window_days: number;
+  total_feedback: number;
+  buckets: TrustScoreBucket[];
+  overall: TrustScoreBucket | null;
+}
+
+export interface BriefExportRequest {
+  period_days?: number;
+  include_paths?: boolean;
+  include_alerts?: boolean;
+  include_recommendations?: boolean;
+  include_forecast?: boolean;
+  max_paths?: number;
+  max_alerts?: number;
+}
 
 // ── Manual simulation types ────────────────────────────────────────────────────
 
@@ -405,6 +484,26 @@ export interface ManualSimulationRequest {
   relations: ManualRelation[];
 }
 
+export interface EventGraphNode {
+  name: string;
+  type: string;
+  sector?: string;
+  country?: string;
+  ticker?: string;
+}
+
+export interface EventGraphEdge {
+  from_entity: string;
+  to_entity: string;
+  relation_type: string;
+  impact_score: number;
+}
+
+export interface EventGraph {
+  nodes: EventGraphNode[];
+  edges: EventGraphEdge[];
+}
+
 export interface ManualSimulationResult {
   simulation_id: string;
   committed: boolean;
@@ -422,4 +521,6 @@ export interface ManualSimulationResult {
   llm_event_summary: string;
   // Strategic advice from dedicated explain LLM
   strategic_advice: string;
+  // Raw LLM-extracted causal graph (only event entities, no KG data)
+  event_graph: EventGraph;
 }

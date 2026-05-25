@@ -164,8 +164,16 @@ def _get_engine():
 # ── JSON extraction helpers ────────────────────────────────────────────────────
 
 def _extract_json_from_response(raw: str) -> Optional[Dict[str, Any]]:
-    """Robustly extract JSON from an LLM response that may contain markdown fences."""
-    clean = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
+    """Robustly extract JSON from an LLM response.
+
+    Handles:
+    - Markdown fences (```json ... ```)
+    - Chain-of-thought blocks (<think>...</think>) from qwen3, deepseek-r1, etc.
+    """
+    # Strip CoT thinking blocks produced by qwen3-32b / deepseek-r1
+    clean = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
+    # Strip markdown fences
+    clean = re.sub(r"```(?:json)?\s*", "", clean).strip().rstrip("`").strip()
     try:
         return json.loads(clean)
     except json.JSONDecodeError:

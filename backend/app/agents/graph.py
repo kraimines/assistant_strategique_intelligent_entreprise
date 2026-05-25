@@ -35,6 +35,7 @@ from app.agents.erp_agent import erp_agent_node
 from app.agents.hr_agent import hr_agent_node
 from app.agents.orchestrator import orchestrator_node
 from app.agents.rag_agent import rag_agent_node
+from app.agents.report_agent import report_agent_node
 from app.agents.state import AgentState
 from app.core.llm import get_text_llm, invoke_with_retry
 from app.prompts.final_response_prompts import FINAL_RESPONSE_PROMPT, REPORT_PROMPT
@@ -132,6 +133,9 @@ def route_after_domain_agent(state: AgentState) -> str:
         if state.get("requires_email"):
             logger.debug("route_after_domain_agent: rag done + requires_email → email_agent")
             return "email_agent"
+        if state.get("requires_report"):
+            logger.debug("route_after_domain_agent: rag done + requires_report → report_agent")
+            return "report_agent"
         return "final_response_node"
 
     # Check if the last human message contains documentary keywords
@@ -148,6 +152,10 @@ def route_after_domain_agent(state: AgentState) -> str:
     if state.get("requires_email"):
         logger.debug("route_after_domain_agent: requires_email → email_agent")
         return "email_agent"
+
+    if state.get("requires_report"):
+        logger.debug("route_after_domain_agent: requires_report → report_agent")
+        return "report_agent"
 
     return "final_response_node"
 
@@ -236,6 +244,9 @@ def route_after_rag(state: AgentState) -> str:
     if state.get("requires_email"):
         logger.debug("route_after_rag: requires_email → email_agent")
         return "email_agent"
+    if state.get("requires_report"):
+        logger.debug("route_after_rag: requires_report → report_agent")
+        return "report_agent"
     return "final_response_node"
 
 
@@ -377,6 +388,7 @@ builder.add_node("erp_agent", erp_agent_node)
 builder.add_node("rag_agent", rag_agent_node)
 builder.add_node("email_agent", email_agent_node)
 builder.add_node("competitive_intel_agent", competitive_intel_agent_node)
+builder.add_node("report_agent", report_agent_node)
 builder.add_node("final_response_node", final_response_node)
 
 builder.set_entry_point("orchestrator")
@@ -413,6 +425,7 @@ for _agent in ("hr_agent", "crm_agent", "erp_agent"):
         {
             "rag_agent":           "rag_agent",
             "email_agent":         "email_agent",
+            "report_agent":        "report_agent",
             "final_response_node": "final_response_node",
         },
     )
@@ -422,12 +435,14 @@ builder.add_conditional_edges(
     route_after_rag,
     {
         "email_agent":         "email_agent",
+        "report_agent":        "report_agent",
         "final_response_node": "final_response_node",
     },
 )
 
 builder.add_edge("email_agent", "final_response_node")
 builder.add_edge("competitive_intel_agent", "final_response_node")
+builder.add_edge("report_agent", END)
 builder.add_edge("final_response_node", END)
 
 graph = builder.compile(checkpointer=MemorySaver())
@@ -470,9 +485,12 @@ async def run_agent_graph(
                 if not isinstance(node_output, dict):
                     continue
 
-                if node_name == "final_response_node":
+                if node_name in ("final_response_node", "report_agent"):
                     response_text: str = node_output.get("final_response") or ""
-                    is_report_flag = bool(node_output.get("requires_report", False))
+                    if node_name == "report_agent":
+                        is_report_flag = True
+                    else:
+                        is_report_flag = bool(node_output.get("requires_report", False))
                     if response_text:
                         # Yield in chunks of ~50 chars to simulate token streaming
                         chunk_size = 50

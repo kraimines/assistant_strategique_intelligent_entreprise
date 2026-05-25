@@ -10,17 +10,17 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FlaskConical, Play, Save, X, TrendingDown, TrendingUp,
-  AlertTriangle, Loader2, CheckCircle2, Info, ArrowRight,
+  FlaskConical, Save, X, TrendingDown, TrendingUp,
+  AlertTriangle, Loader2, CheckCircle2, Info,
   Sparkles, Swords, Shield, Cpu, Globe, Users, BarChart2,
   ChevronDown, ChevronUp, Lightbulb,
 } from 'lucide-react';
 
 import AppShell from '../components/layout/AppShell';
 import GlassCard from '../components/ui/GlassCard';
-import PropagationGraph from '../components/Simulation/PropagationGraph';
+import EventCausalGraph from '../components/Simulation/EventCausalGraph';
 import { marketAnalysisApi } from '../api/marketAnalysisApi';
-import type { ManualSimulationResult, PropagationPath } from '../api/marketAnalysisApi';
+import type { ManualSimulationResult } from '../api/marketAnalysisApi';
 
 // ── Catégories (hint pour le LLM) ────────────────────────────────────────────
 
@@ -287,15 +287,25 @@ export default function MarketSimulate() {
                 <StrategicAdvicePanel advice={result.strategic_advice} />
               )}
 
-              {/* Chemins de propagation */}
-              {/* Always show propagation section — use real paths if available,
-                  else build a minimal fallback from extracted entities */}
-              <PropagationPaths
-                paths={result.propagation_paths}
-                fallbackEntities={result.extracted_entities ?? []}
-                eventTitle={eventText}
-                impactPositive={result.talan_impact_pct >= 0}
-              />
+              {/* Graphe causal extrait par le LLM — uniquement les entités de l'événement */}
+              {result.event_graph?.nodes?.length > 0 && (
+                <div style={{ ...CARD, padding: 24 }}>
+                  <div style={{ marginBottom: 14 }}>
+                    <h3 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>
+                      Réseau causal de l'événement
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '4px 0 0' }}>
+                      Entités et relations extraites par le LLM — propagation multi-hop vers Talan
+                    </p>
+                  </div>
+                  <EventCausalGraph
+                    eventGraph={result.event_graph}
+                    eventText={eventText}
+                    impactPct={result.talan_impact_pct}
+                    height={440}
+                  />
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -505,188 +515,6 @@ function ImpactPanel({ result, committed, committing, onCommit, onDiscard }: {
   );
 }
 
-// ── Build a fallback path from extracted entities when GNN returns 0 paths ───
-
-function buildFallbackPaths(
-  entities: string[],
-  eventTitle: string,
-  positive: boolean,
-): PropagationPath[] {
-  if (entities.length === 0) return [];
-  const impact = positive ? 0.5 : -0.5;
-  // Filter out "Talan" from intermediate nodes
-  const intermediates = entities.filter(e => e !== 'Talan' && e !== eventTitle.slice(0, 20));
-
-  return [{
-    source_name:        eventTitle.length > 60 ? eventTitle.slice(0, 60) + '…' : eventTitle,
-    source_type:        'Event',
-    chain_score:        impact,
-    chain_conf:         0.6,
-    hops:               intermediates.length + 1,
-    time_horizon_label: '',
-    narrative:          '',
-    steps: [
-      ...intermediates.map(name => ({
-        node_name:        name,
-        node_type:        'Company',
-        relation_type:    'CAUSES_IMPACT_ON',
-        reason:           '',
-        impact_score:     impact,
-        time_horizon:     'short_term',
-      })),
-      {
-        node_name:     'Talan',
-        node_type:     'Company',
-        relation_type: 'CAUSES_IMPACT_ON',
-        reason:        '',
-        impact_score:  impact,
-        time_horizon:  'short_term',
-      },
-    ],
-  }];
-}
-
-// ── Chemins de propagation ────────────────────────────────────────────────────
-
-function PropagationPaths({
-  paths,
-  fallbackEntities = [],
-  eventTitle = '',
-  impactPositive = true,
-}: {
-  paths: PropagationPath[];
-  fallbackEntities?: string[];
-  eventTitle?: string;
-  impactPositive?: boolean;
-}) {
-  const hasRealPaths = paths.length > 0;
-  const displayPaths = hasRealPaths
-    ? paths
-    : buildFallbackPaths(fallbackEntities, eventTitle, impactPositive);
-
-  if (displayPaths.length === 0) return null;
-
-  return (
-    <div style={{ ...CARD, padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div>
-          <h3 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: 0 }}>
-            Propagation vers Talan
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '4px 0 0' }}>
-            {hasRealPaths
-              ? `${paths.length} scénario(s) analysés — cliquez sur un nœud pour le détailler`
-              : 'Visualisation des entités extraites — lancez un pipeline complet pour les chemins calibrés'}
-          </p>
-        </div>
-        {!hasRealPaths && (
-          <span style={{
-            fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-            background: '#FEF9C3', color: '#92400E', border: '1px solid #FDE68A',
-          }}>
-            Aperçu
-          </span>
-        )}
-      </div>
-
-      {/* Force-directed graph — always visible */}
-      <PropagationGraph paths={displayPaths} height={Math.min(600, 280 + displayPaths.length * 12)} />
-
-      {/* Detailed path cards — only for real GNN paths */}
-      {hasRealPaths && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20 }}>
-          {paths.map((p, i) => <PathCard key={i} path={p} rank={i + 1} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PathCard({ path, rank }: { path: PropagationPath; rank: number }) {
-  const exp  = path.explanation;
-  const sev  = exp?.severity ?? 'medium';
-  const neg  = (path.estimated_business_impact_pct ?? 0) < 0;
-  const steps = [path.source_name, ...(path.steps?.map(s => s.node_name) ?? [])];
-
-  return (
-    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
-      {/* Chaîne causale */}
-      <div style={{ background: 'white', padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{
-          width: 24, height: 24, borderRadius: '50%',
-          background: '#F1F5F9', color: 'var(--text-muted)',
-          fontSize: 11, fontWeight: 800, display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, marginTop: 2,
-        }}>
-          {rank}
-        </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-          {steps.map((n, i) => (
-            <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {i > 0 && <ArrowRight size={12} color="var(--text-faint)" />}
-              <span style={{
-                fontSize: 13, fontWeight: n === 'Talan' ? 800 : 600,
-                color: n === 'Talan' ? '#2563EB' : 'var(--text-primary)',
-              }}>
-                {n}
-              </span>
-            </span>
-          ))}
-        </div>
-        {path.estimated_business_impact_pct !== undefined && (
-          <span style={{ fontSize: 15, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0, color: neg ? '#DC2626' : '#059669' }}>
-            {path.estimated_business_impact_pct >= 0 ? '+' : ''}{path.estimated_business_impact_pct.toFixed(1)}%
-          </span>
-        )}
-      </div>
-
-      {/* Explication */}
-      {exp && (
-        <div style={{ background: '#F8FAFC', borderTop: '1px solid var(--border-subtle)', padding: '14px 16px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-            {exp.risk_category && (
-              <span style={{ ...(RISK_BADGE[exp.risk_category] ?? RISK_BADGE.tech_disruption), fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
-                {RISK_LABEL_FR[exp.risk_category] ?? exp.risk_category}
-              </span>
-            )}
-            <span style={{ ...SEV_STYLE[sev], fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
-              {sev === 'critical' ? 'Critique' : sev === 'high' ? 'Élevé' : sev === 'medium' ? 'Modéré' : 'Faible'}
-            </span>
-            {exp.affected_business_unit && (
-              <span style={{ background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE', fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20 }}>
-                {exp.affected_business_unit}
-              </span>
-            )}
-            {exp.affected_sector && (
-              <span style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20 }}>
-                {exp.affected_sector}
-              </span>
-            )}
-            {exp.time_horizon && (
-              <span style={{ background: '#F1F5F9', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 20 }}>
-                {exp.time_horizon === 'immediate' ? 'Immédiat' : exp.time_horizon === 'short' ? 'Court terme' : exp.time_horizon === 'medium' ? '3–6 mois' : '6–18 mois'}
-              </span>
-            )}
-          </div>
-
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6, fontStyle: 'italic', marginBottom: 12 }}>
-            {exp.causal_reasoning}
-          </p>
-
-          <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 8, padding: '10px 14px' }}>
-            <p style={{ color: '#065F46', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-              Action recommandée
-            </p>
-            <p style={{ color: '#047857', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
-              {exp.recommended_action}
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── KPI chip ─────────────────────────────────────────────────────────────────
 

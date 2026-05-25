@@ -75,18 +75,26 @@ def _parse_classification(raw: str) -> Dict[str, Any]:
     Returns:
         Parsed classification dict.
     """
+    import re as _re
+    # Strip <think>...</think> CoT blocks (qwen3-32b, deepseek-r1…)
+    text = _re.sub(r"<think>.*?</think>", "", raw, flags=_re.DOTALL).strip()
     # Strip optional ```json ... ``` fences
-    text = raw.strip()
     if text.startswith("```"):
         lines = text.splitlines()
-        # Remove first and last fence lines
         lines = [l for l in lines if not l.strip().startswith("```")]
         text = "\n".join(lines).strip()
 
     try:
         return json.loads(text)
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning("JSON parse failed (%s) — raw=%r", exc, raw[:200])
+    except (json.JSONDecodeError, ValueError):
+        # Last resort: find the first {...} block
+        m = _re.search(r"\{.*\}", text, _re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group())
+            except (json.JSONDecodeError, ValueError):
+                pass
+        logger.warning("JSON parse failed — raw=%r", raw[:200])
         return {}
 
 
